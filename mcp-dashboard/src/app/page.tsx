@@ -6,7 +6,7 @@ import RequestStream from "@/components/dashboard/RequestStream";
 import CompactStatsCards from "@/components/dashboard/CompactStatsCards";
 
 export default function OverviewPage() {
-  const { logs, isConnected } = useWebSocket("ws://127.0.0.1:8000/ws");
+  const { logs, isConnected, connectionError } = useWebSocket("ws://localhost:8000/ws");
   return (
     <div className="flex flex-col h-screen p-4 gap-4 overflow-hidden">
       {/* Header */}
@@ -45,7 +45,11 @@ export default function OverviewPage() {
 
       {/* Live Request Stream - fills remaining space with internal scrolling */}
       <div className="flex-1 min-h-0">
-        <RequestStream logs={logs} isConnected={isConnected} />
+        <RequestStream
+          logs={logs}
+          isConnected={isConnected}
+          connectionError={connectionError}
+        />
       </div>
     </div>
   );

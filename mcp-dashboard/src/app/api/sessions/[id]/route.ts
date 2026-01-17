@@ -214,11 +214,11 @@ export async function GET(
           lastLog?.status === "Success"
             ? "completed"
             : lastLog?.status === "Error" || lastLog?.status === "Failed"
-            ? "error"
-            : "completed";
+              ? "error"
+              : "completed";
 
         const session: SessionDetail = {
-          id: data.session_id,
+          id: data.session_id || id,
           agent: agent as "claude" | "codex",
           created_at: data.created_at,
           events,

@@ -43,7 +43,7 @@ export default function LogsPage() {
   const [showTools, setShowTools] = useState(true);
 
   // WebSocket for real-time updates
-  const { logs: liveLogs } = useWebSocket("ws://127.0.0.1:8000/ws");
+  const { logs: liveLogs } = useWebSocket("ws://localhost:8000/ws");
 
   // Process incoming WebSocket logs
   useEffect(() => {
@@ -51,26 +51,48 @@ export default function LogsPage() {
 
     // Get the most recent log entry
     const latestLog = liveLogs[0];
-    if (!latestLog.session_id) return;
 
-    const sessionId = latestLog.session_id;
+    // Use session_id if available, otherwise use log id as temporary tracking id
+    // This allows "running" sessions to appear before they complete
+    const sessionId = latestLog.session_id || `temp_${latestLog.id}`;
     const agent = latestLog.agent as "claude" | "codex";
-    const status = latestLog.status === "running" ? "active" :
-                   latestLog.status === "error" ? "error" : "completed";
+    const isRunning = latestLog.status === "Running..." ||
+      latestLog.status === "Running (Batch)..." ||
+      latestLog.status?.toLowerCase().includes("running");
+    const status = isRunning ? "active" :
+      latestLog.status === "Error" || latestLog.status === "Failed" ? "error" : "completed";
 
     // Update sessions list
     setSessions((prev) => {
+      // Check if this is a real session_id (not temporary)
+      const hasRealSessionId = latestLog.session_id && !latestLog.session_id.startsWith("temp_");
+
+      // Look for existing session by current sessionId
       const existingIndex = prev.findIndex((s) => s.id === sessionId);
 
-      if (existingIndex !== -1) {
+      // Also look for a temporary session that may need to be replaced
+      // This happens when a task completes and we get the real session_id
+      const tempSessionId = `temp_${latestLog.id}`;
+      const tempIndex = hasRealSessionId ? prev.findIndex((s) => s.id === tempSessionId) : -1;
+
+      let updated = [...prev];
+
+      // Remove temporary session if we now have a real session_id
+      if (tempIndex !== -1 && hasRealSessionId) {
+        updated = updated.filter((s) => s.id !== tempSessionId);
+      }
+
+      // Recalculate existingIndex after potential removal
+      const finalExistingIndex = updated.findIndex((s) => s.id === sessionId);
+
+      if (finalExistingIndex !== -1) {
         // Update existing session
-        const updated = [...prev];
-        updated[existingIndex] = {
-          ...updated[existingIndex],
+        updated[finalExistingIndex] = {
+          ...updated[finalExistingIndex],
           status,
           last_activity: latestLog.timestamp,
-          prompt: latestLog.prompt || updated[existingIndex].prompt,
-          response: latestLog.response || updated[existingIndex].response,
+          prompt: latestLog.prompt || updated[finalExistingIndex].prompt,
+          response: latestLog.response || updated[finalExistingIndex].response,
         };
         return updated;
       } else {
@@ -84,13 +106,22 @@ export default function LogsPage() {
           response: latestLog.response || "",
           last_activity: latestLog.timestamp,
         };
-        return [newSession, ...prev];
+        return [newSession, ...updated];
       }
     });
 
     // Update selectedSession if it matches the incoming log
     setSelectedSession((prev) => {
-      if (!prev || prev.id !== sessionId) return prev;
+      if (!prev) return prev;
+
+      // Match by session ID or by temporary ID (temp_<log.id>)
+      const tempId = `temp_${latestLog.id}`;
+      const matchesSession = prev.id === sessionId || prev.id === tempId;
+
+      if (!matchesSession) return prev;
+
+      // If we now have a real session_id, update the prev.id
+      const newId = latestLog.session_id || prev.id;
 
       // Build new events from the live log
       const newEvents: SessionEvent[] = [];
@@ -128,6 +159,7 @@ export default function LogsPage() {
 
       return {
         ...prev,
+        id: newId,
         status,
         events: mergedEvents,
       };
@@ -279,9 +311,8 @@ export default function LogsPage() {
 
       {/* Sessions Sidebar */}
       <div
-        className={`${
-          sessionsPanelCollapsed ? "w-12" : "w-80"
-        } h-full flex flex-col border-l border-white/5 bg-[#0c0c0e] flex-shrink-0 transition-all duration-300`}
+        className={`${sessionsPanelCollapsed ? "w-12" : "w-80"
+          } h-full flex flex-col border-l border-white/5 bg-[#0c0c0e] flex-shrink-0 transition-all duration-300`}
       >
         <div className="p-4 border-b border-white/5 flex justify-between items-center">
           {!sessionsPanelCollapsed && (
@@ -320,11 +351,10 @@ export default function LogsPage() {
                   <button
                     key={f}
                     onClick={() => setFilter(f)}
-                    className={`flex-1 py-1.5 text-xs font-medium rounded transition-all capitalize ${
-                      filter === f
-                        ? "bg-primary text-white shadow-sm ring-1 ring-white/10"
-                        : "text-gray-400 hover:text-white hover:bg-white/5"
-                    }`}
+                    className={`flex-1 py-1.5 text-xs font-medium rounded transition-all capitalize ${filter === f
+                      ? "bg-primary text-white shadow-sm ring-1 ring-white/10"
+                      : "text-gray-400 hover:text-white hover:bg-white/5"
+                      }`}
                   >
                     {f === "all" ? "All" : f === "claude" ? "Claude" : "Codex"}
                   </button>
@@ -343,19 +373,17 @@ export default function LogsPage() {
                   <div
                     key={session.id}
                     onClick={() => selectSession(session)}
-                    className={`p-4 cursor-pointer border-b border-white/5 transition-colors ${
-                      selectedSession?.id === session.id
-                        ? "border-l-4 border-l-primary bg-primary/5"
-                        : "border-l-4 border-l-transparent hover:bg-white/[0.02]"
-                    }`}
+                    className={`p-4 cursor-pointer border-b border-white/5 transition-colors ${selectedSession?.id === session.id
+                      ? "border-l-4 border-l-primary bg-primary/5"
+                      : "border-l-4 border-l-transparent hover:bg-white/[0.02]"
+                      }`}
                   >
                     <div className="flex justify-between items-start mb-1">
                       <span
-                        className={`font-mono text-sm ${
-                          selectedSession?.id === session.id
-                            ? "font-semibold text-white"
-                            : "font-medium text-gray-300"
-                        }`}
+                        className={`font-mono text-sm ${selectedSession?.id === session.id
+                          ? "font-semibold text-white"
+                          : "font-medium text-gray-300"
+                          }`}
                       >
                         {session.id.slice(0, 12)}...
                       </span>
@@ -363,8 +391,8 @@ export default function LogsPage() {
                         {session.status === "active"
                           ? "Active"
                           : session.status === "error"
-                          ? "Error"
-                          : "Completed"}
+                            ? "Error"
+                            : "Completed"}
                       </span>
                     </div>
                     <div className="text-xs text-gray-400 mb-2">

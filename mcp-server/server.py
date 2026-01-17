@@ -12,6 +12,7 @@ from pydantic import BaseModel
 from collections import deque
 from datetime import datetime
 from pathlib import Path
+from db_logger import log_request_to_db
 
 # --- Configuration ---
 app = FastAPI()
@@ -217,7 +218,10 @@ def parse_codex_events(raw_output: str, prompt: str) -> list:
 
 # --- Helper: Command Runner (Async for Single Calls) ---
 async def run_cli_command(command, args, prompt_text=""):
-    """Generic async wrapper for CLI calls."""
+    """Generic async wrapper for CLI calls.
+
+    Returns tuple of (output, start_time) so caller can log with session_id.
+    """
     full_cmd = [command] + args
     start_time = datetime.now()
     log_entry = {
@@ -245,7 +249,7 @@ async def run_cli_command(command, args, prompt_text=""):
             log_entry["response"] = f"Exit Code {process.returncode}: {process.stderr}"
             await broadcast_log_update(log_entry)
             raise Exception(process.stderr)
-        return process.stdout
+        return process.stdout, start_time
     except Exception as e:
         log_entry["status"] = "Failed"
         log_entry["response"] = str(e)
@@ -262,7 +266,7 @@ def run_agent_sync(task: BatchTask):
     prompt = task.instruction
     session_id = task.session_id
     is_new_session = session_id is None
-    
+
     # Construct args
     if agent == "claude":
         args = ["--print", "--output-format=json", "--dangerously-skip-permissions", "--verbose"]
@@ -290,18 +294,19 @@ def run_agent_sync(task: BatchTask):
         "response": "",
         "raw_output": ""
     }
-    
+
     # Append to history safely
     call_history.appendleft(log_entry)
     broadcast_log_update_sync(log_entry)
 
+    final_status = "error"
     try:
         env = os.environ.copy()
         env["CI"] = "true"
-        
+
         # BLOCKING CALL - Safe because we are in a thread
         process = subprocess.run(full_cmd, capture_output=True, text=True, encoding='utf-8', env=env)
-        
+
         output = process.stdout
         log_entry["raw_output"] = output + "\n" + process.stderr
 
@@ -343,12 +348,13 @@ def run_agent_sync(task: BatchTask):
             log_entry["response"] = final_text[:100] + "..."
             log_entry["events"] = events
             log_entry["session_id"] = str(sid) if sid else None
+            final_status = "success"
 
             # Save log
             save_log_to_file(agent, str(sid), log_entry, is_new_session)
 
         broadcast_log_update_sync(log_entry)
-        
+
         # Return format for the batch system
         return {
             "text": final_text,
@@ -361,6 +367,9 @@ def run_agent_sync(task: BatchTask):
         log_entry["response"] = str(e)
         broadcast_log_update_sync(log_entry)
         return {"text": "", "session_id": session_id, "error": str(e)}
+    finally:
+        duration_ms = int((datetime.now() - start_time).total_seconds() * 1000)
+        log_request_to_db(agent, prompt, final_status, duration_ms, str(sid) if sid else "")
 
 def batch_worker(batch_id: str, task: BatchTask):
     """Worker function for threads."""
@@ -378,34 +387,42 @@ async def call_claude(req: AgentRequest):
     args = ["--print", "--output-format=json", "--dangerously-skip-permissions", "--verbose"]
     if req.session_id: args.append(f"--resume={req.session_id}")
     args.append(req.prompt)
-    output = await run_cli_command("claude", args, req.prompt)
-    
+    output, start_time = await run_cli_command("claude", args, req.prompt)
+
+    sid = ""
+    final_status = "error"
     try:
         data = json.loads(output)
         result_item = next((item for item in (data if isinstance(data, list) else [data]) if isinstance(item, dict) and "result" in item), {})
         text = result_item.get("result", "")
         sid = result_item.get("session_id", "")
         events = parse_claude_events(output, req.prompt)
-        
+
         call_history[0]["status"] = "Success"
         call_history[0]["response"] = text[:100] + "..."
         call_history[0]["events"] = events
         call_history[0]["session_id"] = sid
-        await broadcast_log_update(call_history[0])
         save_log_to_file("claude", sid, call_history[0], req.session_id is None)
+        await broadcast_log_update(call_history[0])
+        #save_log_to_file("claude", sid, call_history[0], req.session_id is None)
+        final_status = "success"
         return {"text": text, "session_id": sid}
     except Exception as e:
         return {"error": str(e), "raw": output}
+    finally:
+        duration_ms = int((datetime.now() - start_time).total_seconds() * 1000)
+        log_request_to_db("claude", req.prompt, final_status, duration_ms, sid)
 
 @app.post("/agent/codex")
 async def call_codex(req: AgentRequest):
     args = ["exec", "--json", "--dangerously-bypass-approvals-and-sandbox", "--skip-git-repo-check"]
     if req.session_id: args.extend(["resume", req.session_id, req.prompt])
     else: args.append(req.prompt)
-    output = await run_cli_command("codex", args, req.prompt)
-    
+    output, start_time = await run_cli_command("codex", args, req.prompt)
+
+    sid = None
+    final_status = "error"
     try:
-        sid = None
         full_text = []
         for line in output.splitlines():
             if not line.strip(): continue
@@ -413,18 +430,23 @@ async def call_codex(req: AgentRequest):
             if ev.get("type") == "thread.started": sid = ev.get("thread_id")
             if ev.get("type") == "item.completed" and ev.get("item", {}).get("type") == "agent_message":
                 full_text.append(ev.get("item", {}).get("text", ""))
-        
+
         final_response = "".join(full_text)
         events = parse_codex_events(output, req.prompt)
         call_history[0]["status"] = "Success"
         call_history[0]["response"] = final_response[:100] + "..."
         call_history[0]["events"] = events
         call_history[0]["session_id"] = str(sid) if sid else None
-        await broadcast_log_update(call_history[0])
         save_log_to_file("codex", str(sid), call_history[0], req.session_id is None)
+        await broadcast_log_update(call_history[0])
+        #save_log_to_file("codex", str(sid), call_history[0], req.session_id is None)
+        final_status = "success"
         return {"text": final_response, "session_id": sid}
     except Exception as e:
         return {"error": str(e), "raw": output}
+    finally:
+        duration_ms = int((datetime.now() - start_time).total_seconds() * 1000)
+        log_request_to_db("codex", req.prompt, final_status, duration_ms, str(sid) if sid else "")
 
 # --- BATCH ENDPOINTS ---
 
@@ -541,14 +563,17 @@ async def get_session_logs(agent: str, session_id: str):
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     connected_clients.add(websocket)
+    print(f"[WS] Client connected. Total clients: {len(connected_clients)}")
     try:
         for log in call_history:
             await websocket.send_text(json.dumps({"type": "log_update", "log": log}))
+        print(f"[WS] Sent {len(call_history)} initial logs to client")
         while True: 
             await websocket.receive_text()
-    except (WebSocketDisconnect, RuntimeError):
-        pass
+    except (WebSocketDisconnect, RuntimeError) as e:
+        print(f"[WS] Client disconnected: {type(e).__name__}")
     except Exception as e:
         print(f"WebSocket Error: {e}")
     finally:
         connected_clients.discard(websocket)
+        print(f"[WS] Client removed. Total clients: {len(connected_clients)}")

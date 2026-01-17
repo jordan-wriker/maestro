@@ -1,40 +1,77 @@
-const statsCards = [
-  {
-    title: "Claude API Usage",
-    value: "48,201",
-    change: "+12.5%",
-    changeType: "positive",
-    icon: "psychology",
-    iconColor: "text-primary",
-    progress: 75,
-    progressColor: "bg-primary",
-    subtitle: "Tokens processed today",
-  },
-  {
-    title: "ChatGPT Codex Requests",
-    value: "12,405",
-    change: "+4.2%",
-    changeType: "positive",
-    icon: "code",
-    iconColor: "text-blue-500",
-    progress: 45,
-    progressColor: "bg-blue-500",
-    subtitle: "Code generations today",
-  },
-  {
-    title: "Average Latency",
-    value: "142",
-    valueSuffix: "ms",
-    change: "+2ms",
-    changeType: "negative",
-    icon: "speed",
-    iconColor: "text-orange-500",
-    showChart: true,
-    subtitle: "Last 60 minutes",
-  },
-];
+import { useEffect, useState } from "react";
 
 export default function CompactStatsCards() {
+  const [stats, setStats] = useState({
+    claudeTasks: 0,
+    codexTasks: 0,
+    avgLatency: 0,
+  });
+
+  useEffect(() => {
+    let isMounted = true;
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+    const loadStats = async () => {
+      try {
+        const response = await fetch("/api/stats");
+        if (!response.ok) return;
+        const data = await response.json();
+        if (!isMounted) return;
+        setStats({
+          claudeTasks: data?.claudeTasks ?? 0,
+          codexTasks: data?.codexTasks ?? 0,
+          avgLatency: data?.avgLatency ?? 0,
+        });
+      } catch {
+        // Ignore transient errors; keep defaults.
+      }
+    };
+
+    loadStats();
+    intervalId = setInterval(loadStats, 5000);
+    return () => {
+      isMounted = false;
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
+  }, []);
+
+  const statsCards = [
+    {
+      title: "Claude Tasks",
+      value: stats.claudeTasks.toLocaleString(),
+      change: "+12.5%",
+      changeType: "positive",
+      icon: "psychology",
+      iconColor: "text-primary",
+      progress: 75,
+      progressColor: "bg-primary",
+      subtitle: "Tokens processed today",
+    },
+    {
+      title: "Codex Tasks",
+      value: stats.codexTasks.toLocaleString(),
+      change: "+4.2%",
+      changeType: "positive",
+      icon: "code",
+      iconColor: "text-blue-500",
+      progress: 45,
+      progressColor: "bg-blue-500",
+      subtitle: "Code generations today",
+    },
+    {
+      title: "Avg Task Latency",
+      value: stats.avgLatency.toLocaleString(),
+      valueSuffix: "ms",
+      change: "+2ms",
+      changeType: "negative",
+      icon: "speed",
+      iconColor: "text-orange-500",
+      showChart: true,
+      subtitle: "Last 60 minutes",
+    },
+  ];
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
       {statsCards.map((card) => (
