@@ -1,0 +1,35 @@
+{
+  "session_id": "019bc718-00f6-77d3-97d1-479ab5f5e171",
+  "agent": "codex",
+  "created_at": "08:56:37",
+  "logs": [
+    {
+      "id": 1768571797653,
+      "timestamp": "08:56:37",
+      "agent": "codex",
+      "command": "codex exec --json --dangerously-bypass-approvals-and-sandbox --skip-git-repo-check Hello My name is Gary!",
+      "prompt": "Hello My name is Gary!",
+      "status": "Success",
+      "response": "Hi Gary! How can I help today?...",
+      "raw_output": "{\"type\":\"thread.started\",\"thread_id\":\"019bc718-00f6-77d3-97d1-479ab5f5e171\"}\n{\"type\":\"turn.started\"}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_0\",\"type\":\"reasoning\",\"text\":\"**Providing greeting response**\"}}\n{\"type\":\"item.completed\",\"item\":{\"id\":\"item_1\",\"type\":\"agent_message\",\"text\":\"Hi Gary! How can I help today?\"}}\n{\"type\":\"turn.completed\",\"usage\":{\"input_tokens\":4078,\"cached_input_tokens\":3200,\"output_tokens\":15}}\n\n",
+      "events": [
+        {
+          "type": "prompt",
+          "content": "Hello My name is Gary!"
+        },
+        {
+          "type": "system",
+          "content": "Thread started: 019bc718..."
+        },
+        {
+          "type": "reasoning",
+          "content": "**Providing greeting response**"
+        },
+        {
+          "type": "response",
+          "content": "Hi Gary! How can I help today?"
+        }
+      ]
+    }
+  ]
+}

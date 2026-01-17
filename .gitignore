@@ -1,0 +1,43 @@
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Antigravity & Planning
+.agent/
+plans/
+
+# Node functionality
+node_modules/
+npm-debug.log
+yarn-debug.log*
+yarn-error.log*
+.next/
+dist/
+build/
+coverage/
+
+# Python functionality
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.env
+.venv
+env/
+venv/
+ENV/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Logs configuration
+logs/claude/*
+!logs/claude/.gitkeep
+logs/codex/*
+!logs/codex/.gitkeep
+
+# OS
+.DS_Store
+Thumbs.db
