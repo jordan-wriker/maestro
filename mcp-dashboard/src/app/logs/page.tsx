@@ -187,6 +187,22 @@ export default function LogsPage() {
     setLoadingDetail(true);
     try {
       const res = await fetch(`/api/sessions/${session.id}`);
+
+      if (!res.ok) {
+        if (res.status === 404) {
+          // If session not found (deleted), remove it from the list
+          console.warn(`Session ${session.id} not found (404), removing from list.`);
+          setSessions((prev) => prev.filter((s) => s.id !== session.id));
+          if (selectedSession?.id === session.id) {
+            setSelectedSession(null);
+          }
+        } else {
+          console.error(`Failed to fetch session detail: ${res.status} ${res.statusText}`);
+        }
+        setLoadingDetail(false);
+        return;
+      }
+
       const data = await res.json();
       setSelectedSession(data);
     } catch (error) {
@@ -234,7 +250,7 @@ export default function LogsPage() {
               <>
                 <h2 className="text-xl font-bold text-white flex items-center gap-2">
                   <span className="font-mono text-primary truncate">
-                    {selectedSession.id.slice(0, 12)}...
+                    {selectedSession.id?.slice(0, 12)}...
                   </span>
                   <span
                     className={`px-2 py-0.5 rounded text-xs font-medium border ${getAgentColor(

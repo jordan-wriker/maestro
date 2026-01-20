@@ -6,6 +6,7 @@ import { useState } from "react";
 
 const navItems = [
   { href: "/", label: "Overview", icon: "dashboard" },
+  { href: "/batch", label: "Batch Tasks", icon: "account_tree" },
   { href: "/tools", label: "Tools", icon: "extension" },
   { href: "/logs", label: "Agents", icon: "smart_toy" },
 ];
