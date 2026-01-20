@@ -12,22 +12,22 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     {
       name: "claude",
       description: "Start a NEW Claude session.",
-      inputSchema: { type: "object", properties: { prompt: { type: "string" } }, required: ["prompt"] }
+      inputSchema: { type: "object", properties: { prompt: { type: "string" }, pwd: { type: "string" } }, required: ["prompt"] }
     },
     {
       name: "claude-reply",
       description: "Resume a Claude session.",
-      inputSchema: { type: "object", properties: { prompt: { type: "string" }, session_id: { type: "string" } }, required: ["prompt", "session_id"] }
+      inputSchema: { type: "object", properties: { prompt: { type: "string" }, session_id: { type: "string" }, pwd: { type: "string" } }, required: ["prompt", "session_id"] }
     },
     {
       name: "codex",
       description: "Start a NEW Codex session.",
-      inputSchema: { type: "object", properties: { prompt: { type: "string" } }, required: ["prompt"] }
+      inputSchema: { type: "object", properties: { prompt: { type: "string" }, pwd: { type: "string" } }, required: ["prompt"] }
     },
     {
       name: "codex-reply",
       description: "Resume a Codex session.",
-      inputSchema: { type: "object", properties: { prompt: { type: "string" }, session_id: { type: "string" } }, required: ["prompt", "session_id"] }
+      inputSchema: { type: "object", properties: { prompt: { type: "string" }, session_id: { type: "string" }, pwd: { type: "string" } }, required: ["prompt", "session_id"] }
     },
     {
       name: "submit_batch",
@@ -35,6 +35,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       inputSchema: {
         type: "object",
         properties: {
+          pwd: { type: "string", description: "The working directory for this batch of tasks." },
           tasks: {
             type: "array",
             items: {
@@ -80,6 +81,9 @@ async function callBackend(endpoint, body) {
     });
 
     const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.detail ? JSON.stringify(data.detail) : data.error || `HTTP ${res.status}`);
+    }
     if (data.error) throw new Error(data.error);
     return data;
   } catch (error) {
@@ -87,23 +91,25 @@ async function callBackend(endpoint, body) {
   }
 }
 
-async function handleSingleAgent(agent, prompt, sessionId = null) {
+async function handleSingleAgent(agent, prompt, pwd, sessionId = null) {
   try {
-    const data = await callBackend(`/agent/${agent}`, { prompt, session_id: sessionId });
-    
+    const finalPwd = pwd || process.cwd();
+    const data = await callBackend(`/agent/${agent}`, { prompt, pwd: finalPwd, session_id: sessionId });
+
     // Formatting for visibility
-    const prefix = agent.toUpperCase(); 
+    const prefix = agent.toUpperCase();
     const visibleOutput = `${prefix}_SESSION_ID: ${data.session_id}\n===================================\n${data.text}`;
-    
+
     return { content: [{ type: "text", text: visibleOutput }] };
   } catch (error) {
     return { content: [{ type: "text", text: `Backend Error: ${error.message}` }], isError: true };
   }
 }
 
-async function handleSubmitBatch(tasks) {
+async function handleSubmitBatch(tasks, pwd) {
   try {
-    const data = await callBackend("/batch/submit", { tasks });
+    const finalPwd = pwd || process.cwd();
+    const data = await callBackend("/batch/submit", { tasks, pwd: finalPwd });
     return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
   } catch (error) {
     return { content: [{ type: "text", text: `Batch Submit Error: ${error.message}` }], isError: true };
@@ -122,12 +128,12 @@ async function handleCheckBatch(batchId, ackTaskIds = []) {
 server.setRequestHandler(CallToolRequestSchema, async (req) => {
   const { name, arguments: args } = req.params;
 
-  if (name === "claude") return handleSingleAgent("claude", args.prompt);
-  if (name === "claude-reply") return handleSingleAgent("claude", args.prompt, args.session_id);
-  if (name === "codex") return handleSingleAgent("codex", args.prompt);
-  if (name === "codex-reply") return handleSingleAgent("codex", args.prompt, args.session_id);
-  
-  if (name === "submit_batch") return handleSubmitBatch(args.tasks);
+  if (name === "claude") return handleSingleAgent("claude", args.prompt, args.pwd);
+  if (name === "claude-reply") return handleSingleAgent("claude", args.prompt, args.pwd, args.session_id);
+  if (name === "codex") return handleSingleAgent("codex", args.prompt, args.pwd);
+  if (name === "codex-reply") return handleSingleAgent("codex", args.prompt, args.pwd, args.session_id);
+
+  if (name === "submit_batch") return handleSubmitBatch(args.tasks, args.pwd);
   if (name === "check_batch_status") return handleCheckBatch(args.batch_id, args.ack_task_ids);
 
   throw new Error(`Unknown tool: ${name}`);

@@ -43,7 +43,7 @@ export default function LogsPage() {
   const [showTools, setShowTools] = useState(true);
 
   // WebSocket for real-time updates
-  const { logs: liveLogs } = useWebSocket("ws://localhost:8000/ws");
+  const { logs: liveLogs } = useWebSocket();
 
   // Process incoming WebSocket logs
   useEffect(() => {

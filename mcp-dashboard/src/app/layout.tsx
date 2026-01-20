@@ -7,6 +7,8 @@ export const metadata: Metadata = {
   description: "Real-time monitoring of AI context bridges",
 };
 
+import { WebSocketProvider } from "@/providers/WebSocketProvider";
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -31,12 +33,14 @@ export default function RootLayout({
         />
       </head>
       <body className="bg-[#050505] text-gray-200 font-sans h-screen overflow-hidden flex">
-        {/* Background glow effect */}
-        <div className="fixed top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-primary/20 blur-[120px] rounded-full pointer-events-none z-0"></div>
+        <WebSocketProvider>
+          {/* Background glow effect */}
+          <div className="fixed top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-primary/20 blur-[120px] rounded-full pointer-events-none z-0"></div>
 
-        <Sidebar />
+          <Sidebar />
 
-        <main className="flex-1 overflow-hidden relative z-10 flex flex-col">{children}</main>
+          <main className="flex-1 overflow-hidden relative z-10 flex flex-col">{children}</main>
+        </WebSocketProvider>
       </body>
     </html>
   );

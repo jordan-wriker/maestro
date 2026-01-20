@@ -20,7 +20,7 @@ app = FastAPI()
 # Enable CORS for Next.js frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=["*"],  # Allow all origins for development
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -30,7 +30,7 @@ app.add_middleware(
 call_history = deque(maxlen=50)
 
 # WebSocket connections
-connected_clients: Set[WebSocket] = set()
+connected_clients: Dict[str, WebSocket] = {} # Map UUID to WebSocket
 
 # Log storage directory
 LOGS_DIR = Path(__file__).parent.parent / "logs"
@@ -71,13 +71,14 @@ async def broadcast_log_update(log_entry: dict):
     if not connected_clients:
         return
     message = json.dumps({"type": "log_update", "log": log_entry})
-    disconnected = set()
-    for client in connected_clients:
+    disconnected = []
+    for client_id, client in connected_clients.items():
         try:
             await client.send_text(message)
         except:
-            disconnected.add(client)
-    connected_clients.difference_update(disconnected)
+            disconnected.append(client_id)
+    for client_id in disconnected:
+        del connected_clients[client_id]
 
 def broadcast_log_update_sync(log_entry: dict):
     """Thread-safe wrapper to call broadcast from background threads."""
@@ -117,6 +118,7 @@ def save_log_to_file(agent: str, session_id: str, log_entry: dict, is_new_sessio
 
 class AgentRequest(BaseModel):
     prompt: str
+    pwd: str
     session_id: Optional[str] = None
 
 class BatchTask(BaseModel):
@@ -127,6 +129,7 @@ class BatchTask(BaseModel):
 
 class BatchSubmitRequest(BaseModel):
     tasks: List[BatchTask]
+    pwd: str
 
 class BatchStatusRequest(BaseModel):
     batch_id: str
@@ -217,7 +220,7 @@ def parse_codex_events(raw_output: str, prompt: str) -> list:
 
 
 # --- Helper: Command Runner (Async for Single Calls) ---
-async def run_cli_command(command, args, prompt_text=""):
+async def run_cli_command(command, args, prompt_text="", pwd=None):
     """Generic async wrapper for CLI calls.
 
     Returns tuple of (output, start_time) so caller can log with session_id.
@@ -240,7 +243,7 @@ async def run_cli_command(command, args, prompt_text=""):
     try:
         env = os.environ.copy()
         env["CI"] = "true"
-        process = subprocess.run(full_cmd, capture_output=True, text=True, encoding='utf-8', env=env)
+        process = subprocess.run(full_cmd, capture_output=True, text=True, encoding='utf-8', env=env, cwd=pwd)
 
         log_entry["raw_output"] = process.stdout + "\n" + process.stderr
 
@@ -257,7 +260,7 @@ async def run_cli_command(command, args, prompt_text=""):
         raise e
 
 # --- Helper: Command Runner (Synchronous for Batch Threads) ---
-def run_agent_sync(task: BatchTask):
+def run_agent_sync(task: BatchTask, pwd: str):
     """
     Synchronous version of agent execution to run in a background thread.
     Returns the final response string.
@@ -305,7 +308,7 @@ def run_agent_sync(task: BatchTask):
         env["CI"] = "true"
 
         # BLOCKING CALL - Safe because we are in a thread
-        process = subprocess.run(full_cmd, capture_output=True, text=True, encoding='utf-8', env=env)
+        process = subprocess.run(full_cmd, capture_output=True, text=True, encoding='utf-8', env=env, cwd=pwd)
 
         output = process.stdout
         log_entry["raw_output"] = output + "\n" + process.stderr
@@ -371,9 +374,9 @@ def run_agent_sync(task: BatchTask):
         duration_ms = int((datetime.now() - start_time).total_seconds() * 1000)
         log_request_to_db(agent, prompt, final_status, duration_ms, str(sid) if sid else "")
 
-def batch_worker(batch_id: str, task: BatchTask):
+def batch_worker(batch_id: str, task: BatchTask, pwd: str):
     """Worker function for threads."""
-    result = run_agent_sync(task)
+    result = run_agent_sync(task, pwd)
     
     with batch_lock:
         if batch_id in batches:
@@ -387,7 +390,7 @@ async def call_claude(req: AgentRequest):
     args = ["--print", "--output-format=json", "--dangerously-skip-permissions", "--verbose"]
     if req.session_id: args.append(f"--resume={req.session_id}")
     args.append(req.prompt)
-    output, start_time = await run_cli_command("claude", args, req.prompt)
+    output, start_time = await run_cli_command("claude", args, req.prompt, req.pwd)
 
     sid = ""
     final_status = "error"
@@ -418,7 +421,7 @@ async def call_codex(req: AgentRequest):
     args = ["exec", "--json", "--dangerously-bypass-approvals-and-sandbox", "--skip-git-repo-check"]
     if req.session_id: args.extend(["resume", req.session_id, req.prompt])
     else: args.append(req.prompt)
-    output, start_time = await run_cli_command("codex", args, req.prompt)
+    output, start_time = await run_cli_command("codex", args, req.prompt, req.pwd)
 
     sid = None
     final_status = "error"
@@ -461,7 +464,7 @@ async def submit_batch(req: BatchSubmitRequest):
     
     # Launch threads
     for task in req.tasks:
-        t = threading.Thread(target=batch_worker, args=(batch_id, task))
+        t = threading.Thread(target=batch_worker, args=(batch_id, task, req.pwd))
         t.daemon = True
         t.start()
         
@@ -561,19 +564,21 @@ async def get_session_logs(agent: str, session_id: str):
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
+    client_id = str(uuid.uuid4())[:8]
     await websocket.accept()
-    connected_clients.add(websocket)
-    print(f"[WS] Client connected. Total clients: {len(connected_clients)}")
+    connected_clients[client_id] = websocket
+    print(f"[WS][{client_id}] Client connected. Total clients: {len(connected_clients)}")
     try:
         for log in call_history:
             await websocket.send_text(json.dumps({"type": "log_update", "log": log}))
-        print(f"[WS] Sent {len(call_history)} initial logs to client")
+        print(f"[WS][{client_id}] Sent {len(call_history)} initial logs to client")
         while True: 
             await websocket.receive_text()
     except (WebSocketDisconnect, RuntimeError) as e:
-        print(f"[WS] Client disconnected: {type(e).__name__}")
+        print(f"[WS][{client_id}] Client disconnected: {type(e).__name__}")
     except Exception as e:
-        print(f"WebSocket Error: {e}")
+        print(f"[WS][{client_id}] WebSocket Error: {e}")
     finally:
-        connected_clients.discard(websocket)
-        print(f"[WS] Client removed. Total clients: {len(connected_clients)}")
+        if client_id in connected_clients:
+            del connected_clients[client_id]
+        print(f"[WS][{client_id}] Client removed. Total clients: {len(connected_clients)}")

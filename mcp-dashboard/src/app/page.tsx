@@ -6,7 +6,7 @@ import RequestStream from "@/components/dashboard/RequestStream";
 import CompactStatsCards from "@/components/dashboard/CompactStatsCards";
 
 export default function OverviewPage() {
-  const { logs, isConnected, connectionError } = useWebSocket("ws://localhost:8000/ws");
+  const { logs, isConnected, connectionError } = useWebSocket();
   return (
     <div className="flex flex-col h-screen p-4 gap-4 overflow-hidden">
       {/* Header */}
