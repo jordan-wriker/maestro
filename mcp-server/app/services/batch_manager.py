@@ -64,7 +64,7 @@ class BatchManager:
         
         result_payload = {
             "text": "",
-            "session_id": task.session_id,
+            "conversation_id": task.conversation_id,
             "error": None
         }
         
@@ -73,12 +73,12 @@ class BatchManager:
             args = []
             if task.agent == "claude":
                 args = ["--print", "--output-format=json", "--dangerously-skip-permissions", "--verbose"]
-                if task.session_id: args.append(f"--resume={task.session_id}")
+                if task.conversation_id: args.append(f"--resume={task.conversation_id}")
                 args.append(task.instruction)
             else: # codex
                 args = ["exec", "--json", "--dangerously-bypass-approvals-and-sandbox", "--skip-git-repo-check"]
-                if task.session_id:
-                    args.extend(["resume", task.session_id, task.instruction])
+                if task.conversation_id:
+                    args.extend(["resume", task.conversation_id, task.instruction])
                 else:
                     args.append(task.instruction)
             
@@ -86,7 +86,7 @@ class BatchManager:
             
             # 3. Parse Output
             final_text = ""
-            session_id = task.session_id
+            conversation_id = task.conversation_id
             
             if exit_code != 0:
                 # Handle non-zero exit: mark as failed
@@ -114,7 +114,7 @@ class BatchManager:
                     item = next((i for i in (data if isinstance(data, list) else [data]) 
                                if isinstance(i, dict) and "result" in i), {})
                     final_text = item.get("result", "")
-                    session_id = item.get("session_id", session_id)
+                    conversation_id = item.get("conversation_id", conversation_id)
                 except:
                     final_text = stdout
             else: # codex
@@ -125,7 +125,7 @@ class BatchManager:
                         if not line.strip(): continue
                         ev = json.loads(line)
                         if ev.get("type") == "thread.started": 
-                            session_id = ev.get("thread_id")
+                            conversation_id = ev.get("thread_id")
                         if ev.get("type") == "item.completed" and ev.get("item", {}).get("type") == "agent_message":
                             full_text.append(ev.get("item", {}).get("text", ""))
                     final_text = "".join(full_text)
@@ -133,7 +133,7 @@ class BatchManager:
                     final_text = stdout
 
             result_payload["text"] = final_text
-            result_payload["session_id"] = str(session_id) if session_id else None
+            result_payload["conversation_id"] = str(conversation_id) if conversation_id else None
             
             # 4. Update Success
             await self.app_state.update_batch_task(
