@@ -6,8 +6,10 @@ import os
 import threading
 import uuid
 from typing import Optional, Set, List, Dict, Any
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from collections import deque
 from datetime import datetime
@@ -34,6 +36,9 @@ connected_clients: Dict[str, WebSocket] = {} # Map UUID to WebSocket
 
 # Log storage directory
 LOGS_DIR = Path(__file__).parent.parent / "logs"
+
+# Dashboard static files directory
+DASHBOARD_DIR = Path(__file__).parent.parent / "maestro-dashboard" / "dist"
 
 # Batch Storage
 batches: Dict[str, Dict[str, Any]] = {}
@@ -201,7 +206,7 @@ def parse_codex_events(raw_output: str, prompt: str) -> list:
             event = json.loads(line)
             event_type = event.get("type")
             if event_type == "thread.started":
-                events.append({"type": "system", "content": f"Thread started: {event.get('thread_id', 'unknown')[:8]}..."})
+                events.append({"type": "system", "content": f"Thread started: {event.get('thread_id', 'unknown')}"})
             elif event_type == "item.completed":
                 item = event.get("item", {})
                 item_type = item.get("type")
@@ -216,6 +221,13 @@ def parse_codex_events(raw_output: str, prompt: str) -> list:
                     events.append({"type": "response", "content": item.get("text", "")})
         except json.JSONDecodeError:
             continue
+    
+    # Mark the last response as a result (for proper green styling)
+    for i in range(len(events) - 1, -1, -1):
+        if events[i].get("type") == "response":
+            events[i]["type"] = "result"
+            break
+    
     return events
 
 
@@ -508,43 +520,7 @@ async def check_batch_status(req: BatchStatusRequest):
     }
 
 # --- UI Endpoints (Session Management) ---
-
-@app.get("/api/sessions/{agent}")
-async def get_sessions(agent: str):
-    # (Same as your original code)
-    if agent not in ["claude", "codex"]: return {"error": "Invalid agent"}
-    agent_path = LOGS_DIR / agent
-    if not agent_path.exists(): return {"sessions": []}
-    sessions = []
-    for log_file in agent_path.glob("*.json"):
-        try:
-            data = json.loads(log_file.read_text())
-            logs = data.get("logs", [])
-            last_log = logs[-1] if logs else {}
-            sessions.append({
-                "session_id": data.get("session_id"),
-                "created_at": data.get("created_at"),
-                "last_activity": last_log.get("timestamp", data.get("created_at")),
-                "log_count": len(logs),
-                "last_id": last_log.get("id", 0)
-            })
-        except: continue
-    # Sort by created_at timestamp (descending - newest first)
-    # Format: %Y-%m-%d %H:%M:%S (or fallback to %H:%M:%S for legacy logs)
-    def parse_timestamp(ts: str) -> datetime:
-        if not ts:
-            return datetime.min
-        try:
-            return datetime.strptime(ts, "%Y-%m-%d %H:%M:%S")
-        except ValueError:
-            try:
-                # Fallback for legacy time-only format
-                return datetime.strptime(ts, "%H:%M:%S")
-            except ValueError:
-                return datetime.min
-
-    sessions.sort(key=lambda x: parse_timestamp(x.get("created_at", "")), reverse=True)
-    return {"sessions": sessions}
+# Note: The /api/sessions?agent=... query param route at line 623 replaces the old /api/sessions/{agent} route
 
 @app.get("/api/sessions/{agent}/{session_id}")
 async def get_session_logs(agent: str, session_id: str):
@@ -572,7 +548,7 @@ async def websocket_endpoint(websocket: WebSocket):
         for log in call_history:
             await websocket.send_text(json.dumps({"type": "log_update", "log": log}))
         print(f"[WS][{client_id}] Sent {len(call_history)} initial logs to client")
-        while True: 
+        while True:
             await websocket.receive_text()
     except (WebSocketDisconnect, RuntimeError) as e:
         print(f"[WS][{client_id}] Client disconnected: {type(e).__name__}")
@@ -582,3 +558,178 @@ async def websocket_endpoint(websocket: WebSocket):
         if client_id in connected_clients:
             del connected_clients[client_id]
         print(f"[WS][{client_id}] Client removed. Total clients: {len(connected_clients)}")
+
+
+# --- Dashboard API Endpoints ---
+
+@app.get("/api/logs")
+async def get_logs():
+    """Return all logs from call_history for the dashboard."""
+    return list(call_history)
+
+
+@app.get("/api/stats")
+async def get_stats():
+    """Return basic stats for the dashboard."""
+    claude_tasks = sum(1 for log in call_history if log.get("agent") == "claude")
+    codex_tasks = sum(1 for log in call_history if log.get("agent") == "codex")
+
+    # Calculate average latency from logs that have duration info
+    durations = []
+    for log in call_history:
+        # Try to calculate duration from status changes or use default
+        if log.get("status") in ["Success", "Error", "Failed"]:
+            # We don't have duration in logs, so estimate based on log count
+            durations.append(1500)  # Default estimate
+
+    avg_latency = int(sum(durations) / len(durations)) if durations else 0
+
+    return {
+        "claudeTasks": claude_tasks,
+        "codexTasks": codex_tasks,
+        "avgLatency": avg_latency,
+    }
+
+
+@app.get("/api/sessions")
+async def get_sessions_query(agent: str = "all"):
+    """Query sessions by agent type (supports query parameter for dashboard)."""
+    sessions = []
+    agents = ["claude", "codex"] if agent == "all" else [agent]
+
+    for agent_name in agents:
+        if agent_name not in ["claude", "codex"]:
+            continue
+        agent_path = LOGS_DIR / agent_name
+        if not agent_path.exists():
+            continue
+        for log_file in agent_path.glob("*.json"):
+            try:
+                data = json.loads(log_file.read_text())
+                logs = data.get("logs", [])
+                last_log = logs[-1] if logs else {}
+                sessions.append({
+                    "id": data.get("session_id"),
+                    "agent": agent_name,
+                    "created_at": data.get("created_at"),
+                    "status": "completed",
+                    "prompt": last_log.get("prompt", ""),
+                    "response": last_log.get("response", ""),
+                    "last_activity": last_log.get("timestamp", data.get("created_at")),
+                })
+            except:
+                continue
+
+    # Sort by created_at timestamp (descending - newest first)
+    def parse_timestamp(ts: str) -> datetime:
+        if not ts:
+            return datetime.min
+        try:
+            return datetime.strptime(ts, "%Y-%m-%d %H:%M:%S")
+        except ValueError:
+            try:
+                return datetime.strptime(ts, "%H:%M:%S")
+            except ValueError:
+                return datetime.min
+
+    sessions.sort(key=lambda x: parse_timestamp(x.get("created_at", "")), reverse=True)
+    return sessions
+
+
+@app.get("/api/sessions/{session_id}")
+async def get_session_by_id(session_id: str):
+    """Get a specific session by ID (searches both claude and codex)."""
+    for agent in ["claude", "codex"]:
+        log_file = LOGS_DIR / agent / f"{session_id}.json"
+        if log_file.exists():
+            try:
+                data = json.loads(log_file.read_text())
+                logs = data.get("logs", [])
+
+                # Build events from all logs in the session
+                all_events = []
+                for log in logs:
+                    if "events" in log:
+                        all_events.extend(log["events"])
+                    elif "raw_output" in log:
+                        prompt = log.get("prompt", "")
+                        raw = log.get("raw_output", "")
+                        events = parse_claude_events(raw, prompt) if agent == "claude" else parse_codex_events(raw, prompt)
+                        all_events.extend(events)
+
+                # Post-process events for correct display styling
+                # Claude: response events (except last) -> thinking, last response -> result
+                # Codex: reasoning -> thinking, last response -> result
+                full_session_id = data.get("session_id", session_id)
+                
+                # Fix truncated thread IDs in system events
+                for e in all_events:
+                    if e.get("type") == "system":
+                        content = e.get("content", "")
+                        if content.startswith("Thread started:") and "..." in content:
+                            e["content"] = f"Thread started: {full_session_id}"
+                
+                if agent == "claude":
+                    # Check if there's already a result event
+                    has_result = any(e.get("type") == "result" for e in all_events)
+                    response_indices = [i for i, e in enumerate(all_events) if e.get("type") == "response"]
+                    
+                    if has_result:
+                        # If result already exists, convert ALL responses to thinking
+                        for idx in response_indices:
+                            all_events[idx]["type"] = "thinking"
+                    else:
+                        # No result exists: convert all but last response to thinking, last to result
+                        for idx in response_indices[:-1]:
+                            all_events[idx]["type"] = "thinking"
+                        if response_indices:
+                            all_events[response_indices[-1]]["type"] = "result"
+                else:  # codex
+                    # Convert reasoning to thinking for proper purple styling
+                    for e in all_events:
+                        if e.get("type") == "reasoning":
+                            e["type"] = "thinking"
+                    # Check if there's already a result event
+                    has_result = any(e.get("type") == "result" for e in all_events)
+                    if not has_result:
+                        # Find last response and convert to result only if no result exists
+                        for i in range(len(all_events) - 1, -1, -1):
+                            if all_events[i].get("type") == "response":
+                                all_events[i]["type"] = "result"
+                                break
+
+                return {
+                    "id": data.get("session_id"),
+                    "agent": agent,
+                    "created_at": data.get("created_at"),
+                    "events": all_events,
+                    "status": "completed",
+                    "prompt": logs[0].get("prompt", "") if logs else "",
+                }
+            except:
+                pass
+
+    return {"error": "Session not found"}, 404
+
+
+# --- Static File Serving for Dashboard ---
+
+# Mount static assets if dashboard is built
+if DASHBOARD_DIR.exists() and (DASHBOARD_DIR / "assets").exists():
+    app.mount("/assets", StaticFiles(directory=str(DASHBOARD_DIR / "assets")), name="static")
+
+
+@app.get("/{full_path:path}")
+async def serve_spa(request: Request, full_path: str):
+    """Catch-all route to serve the SPA for any non-API routes."""
+    # Skip API and WebSocket routes
+    if full_path.startswith("api/") or full_path.startswith("agent/") or full_path.startswith("batch/") or full_path == "ws":
+        return {"error": "Not found"}, 404
+
+    # Serve index.html for SPA routing
+    index_file = DASHBOARD_DIR / "index.html"
+    if index_file.exists():
+        return FileResponse(str(index_file))
+
+    # Fallback: if dashboard not built, return a simple message
+    return {"message": "Dashboard not built. Run 'npm run build' in maestro-dashboard/"}

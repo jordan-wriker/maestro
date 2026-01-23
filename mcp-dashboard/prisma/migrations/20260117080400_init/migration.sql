@@ -1,9 +1,0 @@
--- CreateTable
-CREATE TABLE "RequestLog" (
-    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-    "agent" TEXT NOT NULL,
-    "prompt" TEXT NOT NULL,
-    "status" TEXT NOT NULL,
-    "duration" INTEGER NOT NULL,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
