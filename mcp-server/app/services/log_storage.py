@@ -156,9 +156,9 @@ class LogStorageService:
                     prompt = log.get("prompt", "")
                     raw = log.get("raw_output", "")
                     if agent == "claude":
-                        log["events"] = parse_claude_events(raw, prompt)
+                        log["events"], _ = parse_claude_events(raw, prompt)
                     else:
-                        log["events"] = parse_codex_events(raw, prompt)
+                        log["events"], _ = parse_codex_events(raw, prompt)
             return data
         except Exception as e:
             logger.error("Error reading session log", session_id=session_id, error=str(e))

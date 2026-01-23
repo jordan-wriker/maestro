@@ -1,6 +1,6 @@
 import asyncio
 from typing import List, Dict, Any, Optional
-from server import BatchTask  # Importing from server.py as per plan
+from app.models.requests import BatchTask
 from app.core.state import AppState
 from app.core.logging import get_logger
 from app.services.agent_runner import AgentRunner

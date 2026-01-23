@@ -1,10 +1,10 @@
 import json
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 
 TRUNCATION_LIMIT = 500
 MAX_TOOL_RESULT_LENGTH = 500
 
-def parse_claude_events(raw_output: str, prompt: str) -> List[Dict[str, Any]]:
+def parse_claude_events(raw_output: str, prompt: str) -> Tuple[List[Dict[str, Any]], Optional[str]]:
     """
     Parse Claude JSON output into normalized events.
     
@@ -13,17 +13,18 @@ def parse_claude_events(raw_output: str, prompt: str) -> List[Dict[str, Any]]:
         prompt: The original prompt sent to the agent.
         
     Returns:
-        List of event dictionaries with keys: type, content, subtype, etc.
+        Tuple of (events list, session_id).
         Event types: prompt, system, response, tool_call, tool_result, result, error.
     """
     events: List[Dict[str, Any]] = []
     tool_calls_by_id: Dict[str, Dict[str, Any]] = {}
     events.append({"type": "prompt", "content": prompt})
+    session_id: Optional[str] = None
 
     try:
         # Handle case where output might be empty or whitespace (e.g. crash)
         if not raw_output.strip():
-             return events
+             return events, session_id
 
         data = json.loads(raw_output)
         if not isinstance(data, list): data = [data]
@@ -68,15 +69,20 @@ def parse_claude_events(raw_output: str, prompt: str) -> List[Dict[str, Any]]:
                             events.append({"type": "tool_result", "content": result_content})
             elif item_type == "result":
                 events.append({"type": "result", "subtype": item.get("subtype", "unknown"), "content": item.get("result", "")})
+            
+            # Extract session_id if present (e.g. from system event or similar if available)
+            # Assuming it might be in top-level or system init
+            if "session_id" in item:
+                session_id = item["session_id"]
                 
     except json.JSONDecodeError as e:
         events.append({"type": "error", "content": f"Failed to parse Claude output: {str(e)}"})
     except Exception as e:
         events.append({"type": "error", "content": f"Unexpected error parsing Claude output: {str(e)}"})
         
-    return events
+    return events, session_id
 
-def parse_codex_events(raw_output: str, prompt: str) -> List[Dict[str, Any]]:
+def parse_codex_events(raw_output: str, prompt: str) -> Tuple[List[Dict[str, Any]], Optional[str]]:
     """
     Parse Codex NDJSON output into normalized events.
     
@@ -85,20 +91,28 @@ def parse_codex_events(raw_output: str, prompt: str) -> List[Dict[str, Any]]:
         prompt: The original prompt sent to the agent.
         
     Returns:
-        List of event dictionaries with keys: type, content, subtype, etc.
+        Tuple of (events list, session_id).
         Event types: prompt, system, reasoning, tool_call, response, result.
     """
     events: List[Dict[str, Any]] = []
     events.append({"type": "prompt", "content": prompt})
+    session_id: Optional[str] = None
 
     if not raw_output.strip():
-        return events
+        return events, session_id
 
     for line_num, line in enumerate(raw_output.splitlines(), 1):
         if not line.strip(): continue
         try:
             event = json.loads(line)
             event_type = event.get("type")
+            
+            # Extract session_id/thread_id
+            if "thread_id" in event:
+                session_id = event["thread_id"]
+            if "session_id" in event:
+                session_id = event["session_id"]
+
             if event_type == "thread.started":
                 events.append({"type": "system", "content": f"Thread started: {event.get('thread_id', 'unknown')}"})
             elif event_type == "item.completed":
@@ -133,4 +147,4 @@ def parse_codex_events(raw_output: str, prompt: str) -> List[Dict[str, Any]]:
             events[i]["type"] = "result"
             break
     
-    return events
+    return events, session_id

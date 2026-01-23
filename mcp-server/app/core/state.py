@@ -40,10 +40,18 @@ class AppState:
             return list(self._call_history)
     
     async def update_latest_call(self, updates: Dict[str, Any]) -> None:
-        """Update the most recent call history entry (thread-safe)."""
+        """Update the most recent call history entry (thread-safe). DEPRECATED, use update_call_by_id."""
         async with self._call_history_lock:
             if self._call_history:
                 self._call_history[0].update(updates)
+
+    async def update_call_by_id(self, log_id: Any, updates: Dict[str, Any]) -> None:
+        """Update a specific call history entry by ID (thread-safe)."""
+        async with self._call_history_lock:
+            for entry in self._call_history:
+                if entry.get("id") == log_id:
+                    entry.update(updates)
+                    break
     
     # Batch Management
     async def create_batch(self, batch_id: str, batch_data: Dict[str, Any]) -> None:
