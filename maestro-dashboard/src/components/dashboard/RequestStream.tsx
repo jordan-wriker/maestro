@@ -85,9 +85,9 @@ export default function RequestStream({
                 </span>
                 <span
                   className="col-span-4 text-gray-300 truncate"
-                  title={log.prompt}
+                  title={log.task}
                 >
-                  {log.prompt.substring(0, 40)}...
+                  {(log.task || "").substring(0, 40)}...
                 </span>
                 <span
                   className={`col-span-2 text-right pr-4 whitespace-nowrap ${getStatusColor(

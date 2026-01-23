@@ -117,20 +117,7 @@ def create_app() -> FastAPI:
             "service": "mcp-server"
         }
 
-    # Root endpoint
-    @app.get("/")
-    async def root():
-        """Root endpoint with API information."""
-        return {
-            "service": "Agent Orchestrator MCP Server",
-            "version": "1.0.0",
-            "status": "running",
-            "endpoints": {
-                "health": "/health",
-                "docs": "/docs" if settings.debug else "disabled",
-                "api": "/api"
-            }
-        }
+
     
     # Mount static files for dashboard if available
     dashboard_dir = Path(settings.dashboard_dir)

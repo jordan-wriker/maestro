@@ -7,8 +7,8 @@ interface SessionSummary {
   agent: "claude" | "codex";
   created_at: string;
   status: "completed" | "error" | "active";
-  prompt: string;
-  response: string;
+  task: string;
+  final_response: string;
   last_activity?: string;
 }
 
@@ -26,7 +26,7 @@ interface SessionDetail {
   created_at: string;
   events: SessionEvent[];
   status: "completed" | "error" | "active";
-  prompt: string;
+  task: string;
 }
 
 export default function LogsPage() {
@@ -86,8 +86,8 @@ export default function LogsPage() {
           ...updated[finalExistingIndex],
           status,
           last_activity: latestLog.timestamp,
-          prompt: latestLog.prompt || updated[finalExistingIndex].prompt,
-          response: latestLog.response || updated[finalExistingIndex].response,
+          task: latestLog.task || updated[finalExistingIndex].task,
+          final_response: latestLog.final_response || updated[finalExistingIndex].final_response,
         };
         return updated;
       } else {
@@ -97,8 +97,8 @@ export default function LogsPage() {
           agent,
           created_at: latestLog.timestamp,
           status,
-          prompt: latestLog.prompt || "",
-          response: latestLog.response || "",
+          task: latestLog.task || "",
+          final_response: latestLog.final_response || "",
           last_activity: latestLog.timestamp,
         };
         return [newSession, ...updated];
@@ -138,11 +138,11 @@ export default function LogsPage() {
             timestamp: evt.timestamp,
           });
         }
-      } else if (latestLog.response) {
+      } else if (latestLog.final_response) {
         // Fallback: create a result event from the response
         newEvents.push({
           type: "result",
-          content: latestLog.response,
+          content: latestLog.final_response,
           timestamp: latestLog.timestamp,
         });
       }
@@ -185,13 +185,22 @@ export default function LogsPage() {
 
   // Fetch session detail when selected
   async function selectSession(session: SessionSummary) {
+    if (!session.id) return;
+
     setLoadingDetail(true);
+    // Optional: Clear or set a loading state for the current session
+    // setSelectedSession(null); 
+
     try {
-      const res = await fetch(`/api/sessions/${session.id}`);
+      // Use the agent-specific route if available, otherwise fallback to generic
+      const url = session.agent
+        ? `/api/sessions/${session.agent}/${session.id}`
+        : `/api/sessions/${session.id}`;
+
+      const res = await fetch(url);
 
       if (!res.ok) {
         if (res.status === 404) {
-          // If session not found (deleted), remove it from the list
           console.warn(`Session ${session.id} not found (404), removing from list.`);
           setSessions((prev) => prev.filter((s) => s.id !== session.id));
           if (selectedSession?.id === session.id) {
@@ -199,6 +208,7 @@ export default function LogsPage() {
           }
         } else {
           console.error(`Failed to fetch session detail: ${res.status} ${res.statusText}`);
+          // On other errors, we might want to alert the user or show an error state
         }
         setLoadingDetail(false);
         return;
@@ -208,8 +218,9 @@ export default function LogsPage() {
       setSelectedSession(data);
     } catch (error) {
       console.error("Failed to fetch session detail:", error);
+    } finally {
+      setLoadingDetail(false);
     }
-    setLoadingDetail(false);
   }
 
   // Auto-select first session
@@ -424,9 +435,9 @@ export default function LogsPage() {
                         {session.agent}
                       </span>
                     </div>
-                    {session.prompt && (
+                    {session.task && (
                       <p className="text-xs text-gray-500 mt-2 line-clamp-2">
-                        {session.prompt.slice(0, 80)}...
+                        {session.task.slice(0, 80)}...
                       </p>
                     )}
                   </div>

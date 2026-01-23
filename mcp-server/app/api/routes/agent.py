@@ -69,31 +69,30 @@ async def run_claude(
             # If failed and no events, add stderr as detail
             initial_log.details = stderr or "Unknown error"
             
-        # Update log entry
-        final_log = initial_log.model_copy()
-        final_log.status = status
-        final_log.events = events
-        
         # Determine final session_id
         if not session_id and extracted_session_id:
              session_id = extracted_session_id
-             final_log.session_id = session_id
         elif not session_id:
-             # Fallback if still no session_id found (rare)
              session_id = str(uuid.uuid4())
-             final_log.session_id = session_id
-        
+
+        # Extract response text
         response_text = ""
-        # Find last result
         for event in reversed(events):
             if event.get("type") == "result":
                 response_text = event.get("content", "")
                 break
+
+        # Update log entry
+        final_log = initial_log.model_copy(update={
+            "status": status,
+            "events": events,
+            "session_id": session_id,
+            "final_response": response_text
+        })
         
         # Update state
         await app_state.update_call_by_id(log_id, final_log.model_dump())
         
-        # Save to file and db
         # Save to file and db
         duration_ms = int((datetime.now() - start_time).total_seconds() * 1000)
         
@@ -174,30 +173,30 @@ async def run_codex(
         # Determine status
         status = "Completed" if exit_code == 0 else "Failed"
         
-        # Update log entry
-        final_log = initial_log.model_copy()
-        final_log.status = status
-        final_log.events = events
-        
-        if exit_code != 0 and stderr:
-             final_log.details = stderr
-        
-        # Extract session_id and response text from NDJSON
+        # Update session_id if found
+        if not session_id and extracted_session_id:
+             session_id = extracted_session_id
+        elif not session_id:
+             session_id = str(uuid.uuid4())
+
         # Extract response text
         full_text = []
         for event in events:
-             if event.get("type") == "response":
+             if event.get("type") in ["response", "result"]:
                   full_text.append(event.get("content", ""))
         
         response_text = "".join(full_text)
+
+        # Update log entry
+        final_log = initial_log.model_copy(update={
+            "status": status,
+            "events": events,
+            "session_id": session_id,
+            "final_response": response_text
+        })
         
-        # Update session_id
-        if not session_id and extracted_session_id:
-             session_id = extracted_session_id
-             final_log.session_id = session_id
-        elif not session_id:
-             session_id = str(uuid.uuid4())
-             final_log.session_id = session_id
+        if exit_code != 0 and stderr:
+             final_log.details = stderr
         
         # Update state
         await app_state.update_call_by_id(log_id, final_log.model_dump())

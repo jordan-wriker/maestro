@@ -119,11 +119,17 @@ class LogStorageService:
                     async with aiofiles.open(log_file, 'r') as f:
                         content = await f.read()
                     
+                    if not content.strip():
+                        continue
+                        
                     session_data = json.loads(content)
-                    for log in session_data.get("logs", []):
-                        all_logs.append(log)
-                except (json.JSONDecodeError, KeyError) as e:
-                    logger.warning("Skipping corrupted log file", file=str(log_file))
+                    logs = session_data.get("logs", [])
+                    if isinstance(logs, list):
+                        for log in logs:
+                            if isinstance(log, dict):
+                                all_logs.append(log)
+                except (json.JSONDecodeError, KeyError, Exception) as e:
+                    logger.warning(f"Skipping corrupted log file {log_file}: {e}")
                     continue
         
         # Sort by ID (timestamp usually) descending
@@ -141,7 +147,24 @@ class LogStorageService:
         """
         Retrieve logs for a specific session.
         """
-        log_file = self.logs_dir / agent / f"{session_id}.json"
+        if not session_id:
+            return None
+            
+        # Handle cases where session_id might already have .json suffix
+        safe_id = session_id
+        if safe_id.endswith(".json"):
+            safe_id = safe_id[:-5]
+            
+        log_file = self.logs_dir / agent / f"{safe_id}.json"
+        
+        # If not found in specified agent, try finding in any agent folder (fallback)
+        if not log_file.exists():
+            for possible_agent in ["claude", "codex"]:
+                fallback_file = self.logs_dir / possible_agent / f"{safe_id}.json"
+                if fallback_file.exists():
+                    log_file = fallback_file
+                    break
+                    
         if not log_file.exists():
             return None
             
@@ -151,14 +174,19 @@ class LogStorageService:
             data = json.loads(content)
             
             # Post-processing to ensure events are present (backward compatibility)
-            for log in data.get("logs", []):
-                if "events" not in log and "raw_output" in log:
-                    prompt = log.get("prompt", "")
-                    raw = log.get("raw_output", "")
-                    if agent == "claude":
-                        log["events"], _ = parse_claude_events(raw, prompt)
-                    else:
-                        log["events"], _ = parse_codex_events(raw, prompt)
+            if "logs" in data:
+                for log in data.get("logs", []):
+                    if "events" not in log and "raw_output" in log:
+                        prompt = log.get("prompt", "")
+                        raw = log.get("raw_output", "")
+                        try:
+                            if agent == "claude":
+                                log["events"], _ = parse_claude_events(raw, prompt)
+                            else:
+                                log["events"], _ = parse_codex_events(raw, prompt)
+                        except Exception as e:
+                            logger.warning(f"Failed to parse internal events for {safe_id}: {e}")
+                            log["events"] = []
             return data
         except Exception as e:
             logger.error("Error reading session log", session_id=session_id, error=str(e))
@@ -169,38 +197,62 @@ class LogStorageService:
         List all sessions, optionally filtered by agent.
         """
         sessions = []
-        agents = ["claude", "codex"] if agent == "all" else [agent]
+        agents_to_check = ["claude", "codex"] if agent == "all" else [agent]
         
-        for agent_name in agents:
-            if agent_name not in ["claude", "codex"]: continue
+        for agent_name in agents_to_check:
+            if agent_name not in ["claude", "codex"]: 
+                continue
             
             agent_path = self.logs_dir / agent_name
-            if not agent_path.exists(): continue
+            if not agent_path.exists(): 
+                continue
             
-            # We use sync glob here as iterating directories is okay for this operation usually,
-            # or could wrap in to_thread if very large.
+            # Use glob to find all json files
             for log_file in agent_path.glob("*.json"):
                 try:
                     async with aiofiles.open(log_file, 'r') as f:
                         content = await f.read()
+                    
+                    if not content.strip():
+                        continue
+                        
                     data = json.loads(content)
                     logs = data.get("logs", [])
+                    
+                    # Sources for basic info
+                    first_log = logs[0] if logs else {}
                     last_log = logs[-1] if logs else {}
                     
+                    # Session ID source: 1. data field, 2. filename stem
+                    s_id = str(data.get("session_id") or log_file.stem)
+                    
+                    # Prompt source
+                    prompt = last_log.get("task") or first_log.get("task") or ""
+                             
+                    # Response source
+                    response = last_log.get("final_response") or ""
+                    
+                    # Status source
+                    status = "completed"
+                    log_status = str(last_log.get("status", "completed")).lower()
+                    if "error" in log_status or "failed" in log_status:
+                        status = "error"
+                    elif "running" in log_status:
+                        status = "active"
+                    
                     sessions.append({
-                        "id": data.get("session_id"),
-                        "agent": agent_name,
-                        "created_at": data.get("created_at"),
-                        "status": "completed",
-                        "prompt": last_log.get("prompt", ""),
-                        "response": last_log.get("response", ""),
-                        "last_activity": last_log.get("timestamp", data.get("created_at")),
+                        "id": s_id,
+                        "agent": str(data.get("agent") or agent_name),
+                        "created_at": str(data.get("created_at") or last_log.get("timestamp") or ""),
+                        "status": status,
+                        "prompt": str(prompt),
+                        "response": str(response),
+                        "last_activity": str(last_log.get("timestamp") or data.get("created_at") or ""),
                     })
-                except:
+                except Exception as e:
+                    logger.debug(f"Skipping log file {log_file}: {e}")
                     continue
                     
-        # Sort by created_at descending
-        # We can implement a helper for parsing, or just string compare if ISO format (which is sortable)
-        # The original code had a robust parser, let's keep it simple or assume consistent ISO
-        sessions.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+        # Sort by last_activity or created_at descending
+        sessions.sort(key=lambda x: x.get("last_activity") or x.get("created_at") or "", reverse=True)
         return sessions

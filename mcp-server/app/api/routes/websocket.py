@@ -1,28 +1,23 @@
 import uuid
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
-from app.api.deps import get_websocket_manager
-from app.services.websocket_manager import WebSocketManager
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from app.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 router = APIRouter()
 
 @router.websocket("/ws")
-async def websocket_endpoint(
-    websocket: WebSocket,
-    manager: WebSocketManager = Depends(get_websocket_manager)
-):
-    # Plan: Generate unique client_id
+async def websocket_endpoint(websocket: WebSocket):
+    """WebSocket endpoint for real-time log updates."""
     client_id = str(uuid.uuid4())[:8]
     
-    # Handle lifecycle
-    # Plan says: "Call websocket_manager.handle_client_lifecycle(client_id, websocket)"
-    # This implies the manager has this loop inside it.
+    # Access websocket_manager directly from app state
+    # WebSocket endpoints don't support Depends() with request-based dependencies
+    manager = websocket.app.state.websocket_manager
     
     try:
         await manager.handle_client_lifecycle(client_id, websocket)
     except WebSocketDisconnect:
-        # Manager likely handles this internally or we need to cleanup if it raises
-        # But if manager handles lifecycle, it probably catches disconnects or expects caller to ignore
-        pass
+        logger.info(f"WebSocket client {client_id} disconnected")
     except Exception as e:
-        # Log error?
-        print(f"WebSocket error: {e}")
+        logger.error(f"WebSocket error for client {client_id}: {e}")

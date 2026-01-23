@@ -4,12 +4,10 @@ export interface LogEntry {
     id: number;
     timestamp: string;
     agent: string;
-    command: string;
-    prompt: string;
+    task: string;
+    final_response?: string;
     session_id?: string;
     status: string;
-    response: string;
-    raw_output?: string;
     events?: unknown[];
 }
 

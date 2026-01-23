@@ -4,13 +4,13 @@ from pydantic import BaseModel
 class AgentRequest(BaseModel):
     prompt: str
     pwd: str
-    session_id: Optional[str] = None
+    conversation_id: Optional[str] = None
 
 class BatchTask(BaseModel):
     id: str
     agent: str
     instruction: str
-    session_id: Optional[str] = None
+    conversation_id: Optional[str] = None
 
 class BatchSubmitRequest(BaseModel):
     tasks: List[BatchTask]

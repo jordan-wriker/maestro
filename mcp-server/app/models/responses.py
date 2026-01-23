@@ -3,7 +3,7 @@ from pydantic import BaseModel
 
 class AgentResponse(BaseModel):
     text: str
-    session_id: Optional[str]
+    conversation_id: Optional[str]
     error: Optional[str] = None
 
 class BatchSubmitResponse(BaseModel):
@@ -24,14 +24,21 @@ class LogEntry(BaseModel):
     details: Optional[str] = None
     events: Optional[List[Dict[str, Any]]] = None
     final_response: Optional[str] = None
-    session_id: Optional[str] = None
+    conversation_id: Optional[str] = None
 
-class SessionSummary(BaseModel):
-    session_id: str
-    created_at: float
-    preview: str
-    event_count: int
+class ConversationSummary(BaseModel):
+    conversation_id: str
+    agent: str  # "claude" or "codex"
+    created_at: str  # ISO format string
+    status: str  # "completed", "error", or "active"
+    prompt: str
+    response: str
+    last_activity: Optional[str] = None  # ISO format string
 
-class SessionDetail(BaseModel):
-    session_id: str
+class ConversationDetail(BaseModel):
+    conversation_id: str
+    agent: str  # "claude" or "codex"
+    created_at: str  # ISO format string
+    status: str  # "completed", "error", or "active"
+    prompt: str
     events: List[Dict[str, Any]]
