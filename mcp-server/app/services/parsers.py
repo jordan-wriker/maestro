@@ -13,18 +13,18 @@ def parse_claude_events(raw_output: str, prompt: str) -> Tuple[List[Dict[str, An
         prompt: The original prompt sent to the agent.
         
     Returns:
-        Tuple of (events list, session_id).
+        Tuple of (events list, conversation_id).
         Event types: prompt, system, response, tool_call, tool_result, result, error.
     """
     events: List[Dict[str, Any]] = []
     tool_calls_by_id: Dict[str, Dict[str, Any]] = {}
     events.append({"type": "prompt", "content": prompt})
-    session_id: Optional[str] = None
+    conversation_id: Optional[str] = None
 
     try:
         # Handle case where output might be empty or whitespace (e.g. crash)
         if not raw_output.strip():
-             return events, session_id
+             return events, conversation_id
 
         data = json.loads(raw_output)
         if not isinstance(data, list): data = [data]
@@ -40,7 +40,7 @@ def parse_claude_events(raw_output: str, prompt: str) -> Tuple[List[Dict[str, An
             item_type = item.get("type")
 
             if item_type == "system" and item.get("subtype") == "init":
-                events.append({"type": "system", "content": f"Session initialized (model: {item.get('model', 'unknown')})"})
+                events.append({"type": "system", "content": f"Conversation initialized (model: {item.get('model', 'unknown')})"})
             elif item_type == "assistant":
                 message = item.get("message", {})
                 content_list = message.get("content", [])
@@ -70,17 +70,18 @@ def parse_claude_events(raw_output: str, prompt: str) -> Tuple[List[Dict[str, An
             elif item_type == "result":
                 events.append({"type": "result", "subtype": item.get("subtype", "unknown"), "content": item.get("result", "")})
             
-            # Extract session_id if present (e.g. from system event or similar if available)
-            # Assuming it might be in top-level or system init
-            if "session_id" in item:
-                session_id = item["session_id"]
+            # Extract conversation_id from any raw output key that might contain it
+            for key in ["session_id", "thread_id", "conversation_id"]:
+                if key in item and item[key]:
+                    conversation_id = str(item[key])
+                    break # Keep the first one found in this item if multiple exist
                 
     except json.JSONDecodeError as e:
         events.append({"type": "error", "content": f"Failed to parse Claude output: {str(e)}"})
     except Exception as e:
         events.append({"type": "error", "content": f"Unexpected error parsing Claude output: {str(e)}"})
         
-    return events, session_id
+    return events, conversation_id
 
 def parse_codex_events(raw_output: str, prompt: str) -> Tuple[List[Dict[str, Any]], Optional[str]]:
     """
@@ -91,15 +92,15 @@ def parse_codex_events(raw_output: str, prompt: str) -> Tuple[List[Dict[str, Any
         prompt: The original prompt sent to the agent.
         
     Returns:
-        Tuple of (events list, session_id).
+        Tuple of (events list, conversation_id).
         Event types: prompt, system, reasoning, tool_call, response, result.
     """
     events: List[Dict[str, Any]] = []
     events.append({"type": "prompt", "content": prompt})
-    session_id: Optional[str] = None
+    conversation_id: Optional[str] = None
 
     if not raw_output.strip():
-        return events, session_id
+        return events, conversation_id
 
     for line_num, line in enumerate(raw_output.splitlines(), 1):
         if not line.strip(): continue
@@ -107,11 +108,11 @@ def parse_codex_events(raw_output: str, prompt: str) -> Tuple[List[Dict[str, Any
             event = json.loads(line)
             event_type = event.get("type")
             
-            # Extract session_id/thread_id
-            if "thread_id" in event:
-                session_id = event["thread_id"]
-            if "session_id" in event:
-                session_id = event["session_id"]
+            # Extract conversation_id from any raw output key that might contain it
+            for key in ["thread_id", "session_id", "conversation_id"]:
+                if key in event and event[key]:
+                    conversation_id = str(event[key])
+                    break # Keep the first one found in this line if multiple exist
 
             if event_type == "thread.started":
                 events.append({"type": "system", "content": f"Thread started: {event.get('thread_id', 'unknown')}"})
@@ -147,4 +148,4 @@ def parse_codex_events(raw_output: str, prompt: str) -> Tuple[List[Dict[str, Any
             events[i]["type"] = "result"
             break
     
-    return events, session_id
+    return events, conversation_id

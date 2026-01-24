@@ -11,23 +11,23 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
   tools: [
     {
       name: "claude",
-      description: "Start a NEW Claude session.",
+      description: "Start a NEW Claude conversation.",
       inputSchema: { type: "object", properties: { prompt: { type: "string" }, pwd: { type: "string" } }, required: ["prompt"] }
     },
     {
       name: "claude-reply",
-      description: "Resume a Claude session.",
-      inputSchema: { type: "object", properties: { prompt: { type: "string" }, session_id: { type: "string" }, pwd: { type: "string" } }, required: ["prompt", "session_id"] }
+      description: "Resume a Claude conversation.",
+      inputSchema: { type: "object", properties: { prompt: { type: "string" }, conversation_id: { type: "string" }, pwd: { type: "string" } }, required: ["prompt", "conversation_id"] }
     },
     {
       name: "codex",
-      description: "Start a NEW Codex session.",
+      description: "Start a NEW Codex conversation.",
       inputSchema: { type: "object", properties: { prompt: { type: "string" }, pwd: { type: "string" } }, required: ["prompt"] }
     },
     {
       name: "codex-reply",
-      description: "Resume a Codex session.",
-      inputSchema: { type: "object", properties: { prompt: { type: "string" }, session_id: { type: "string" }, pwd: { type: "string" } }, required: ["prompt", "session_id"] }
+      description: "Resume a Codex conversation.",
+      inputSchema: { type: "object", properties: { prompt: { type: "string" }, conversation_id: { type: "string" }, pwd: { type: "string" } }, required: ["prompt", "conversation_id"] }
     },
     {
       name: "submit_batch",
@@ -44,7 +44,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
                 id: { type: "string", description: "Unique ID for this task (e.g., 'task_1')" },
                 agent: { type: "string", enum: ["claude", "codex"] },
                 instruction: { type: "string", description: "The prompt for the agent" },
-                session_id: { type: "string", description: "Optional session ID to resume" }
+                conversation_id: { type: "string", description: "Optional conversation ID to resume" }
               },
               required: ["id", "agent", "instruction"]
             }
@@ -91,14 +91,14 @@ async function callBackend(endpoint, body) {
   }
 }
 
-async function handleSingleAgent(agent, prompt, pwd, sessionId = null) {
+async function handleSingleAgent(agent, prompt, pwd, conversationId = null) {
   try {
     const finalPwd = pwd || process.cwd();
-    const data = await callBackend(`/agent/${agent}`, { prompt, pwd: finalPwd, session_id: sessionId });
+    const data = await callBackend(`/agent/${agent}`, { prompt, pwd: finalPwd, conversation_id: conversationId });
 
     // Formatting for visibility
     const prefix = agent.toUpperCase();
-    const visibleOutput = `${prefix}_SESSION_ID: ${data.session_id}\n===================================\n${data.text}`;
+    const visibleOutput = `${prefix}_CONVERSATION_ID: ${data.conversation_id}\n===================================\n${data.text}`;
 
     return { content: [{ type: "text", text: visibleOutput }] };
   } catch (error) {
@@ -129,9 +129,9 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
   const { name, arguments: args } = req.params;
 
   if (name === "claude") return handleSingleAgent("claude", args.prompt, args.pwd);
-  if (name === "claude-reply") return handleSingleAgent("claude", args.prompt, args.pwd, args.session_id);
+  if (name === "claude-reply") return handleSingleAgent("claude", args.prompt, args.pwd, args.conversation_id);
   if (name === "codex") return handleSingleAgent("codex", args.prompt, args.pwd);
-  if (name === "codex-reply") return handleSingleAgent("codex", args.prompt, args.pwd, args.session_id);
+  if (name === "codex-reply") return handleSingleAgent("codex", args.prompt, args.pwd, args.conversation_id);
 
   if (name === "submit_batch") return handleSubmitBatch(args.tasks, args.pwd);
   if (name === "check_batch_status") return handleCheckBatch(args.batch_id, args.ack_task_ids);

@@ -3,7 +3,7 @@ import { useWebSocket } from "@/hooks/useWebSocket";
 import ToggleBar from "@/components/ToggleBar";
 
 interface ConversationSummary {
-  id: string;
+  conversation_id: string; // Changed from id to match backend
   agent: "claude" | "codex";
   created_at: string;
   status: "completed" | "error" | "active";
@@ -21,7 +21,7 @@ interface SessionEvent {
 }
 
 interface ConversationDetail {
-  id: string;
+  conversation_id: string; // Changed
   agent: "claude" | "codex";
   created_at: string;
   events: SessionEvent[];
@@ -68,17 +68,17 @@ export default function LogsPage() {
       // Also look for a temporary conversation that may need to be replaced
       // This happens when a task completes and we get the real conversation_id
       const tempConversationId = `temp_${latestLog.id}`;
-      const tempIndex = hasRealConversationId ? prev.findIndex((s) => s.id === tempConversationId) : -1;
+      const tempIndex = hasRealConversationId ? prev.findIndex((s) => s.conversation_id === tempConversationId) : -1;
 
       let updated = [...prev];
 
       // Remove temporary conversation if we now have a real conversation_id
       if (tempIndex !== -1 && hasRealConversationId) {
-        updated = updated.filter((s) => s.id !== tempConversationId);
+        updated = updated.filter((s) => s.conversation_id !== tempConversationId);
       }
 
       // Recalculate existingIndex after potential removal
-      const finalExistingIndex = updated.findIndex((s) => s.id === conversationId);
+      const finalExistingIndex = updated.findIndex((s) => s.conversation_id === conversationId);
 
       if (finalExistingIndex !== -1) {
         // Update existing conversation
@@ -93,7 +93,7 @@ export default function LogsPage() {
       } else {
         // Add new conversation at the top
         const newConversation: ConversationSummary = {
-          id: conversationId,
+          conversation_id: conversationId,
           agent,
           created_at: latestLog.timestamp,
           status,
@@ -111,12 +111,12 @@ export default function LogsPage() {
 
       // Match by conversation ID or by temporary ID (temp_<log.id>)
       const tempId = `temp_${latestLog.id}`;
-      const matchesConversation = prev.id === conversationId || prev.id === tempId;
+      const matchesConversation = prev.conversation_id === conversationId || prev.conversation_id === tempId;
 
       if (!matchesConversation) return prev;
 
       // If we now have a real conversation_id, update the prev.id
-      const newId = latestLog.conversation_id || prev.id;
+      const newId = latestLog.conversation_id || prev.conversation_id;
 
       // Build new events from the live log
       const newEvents: SessionEvent[] = [];
@@ -160,7 +160,7 @@ export default function LogsPage() {
 
       return {
         ...prev,
-        id: newId,
+        conversation_id: newId,
         status,
         events: mergedEvents,
       };
@@ -185,7 +185,7 @@ export default function LogsPage() {
 
   // Fetch conversation detail when selected
   async function selectConversation(conversation: ConversationSummary) {
-    if (!conversation.id) return;
+    if (!conversation.conversation_id) return;
 
     setLoadingDetail(true);
     // Optional: Clear or set a loading state for the current conversation
@@ -194,16 +194,16 @@ export default function LogsPage() {
     try {
       // Use the agent-specific route if available, otherwise fallback to generic
       const url = conversation.agent
-        ? `/api/conversations/${conversation.agent}/${conversation.id}`
-        : `/api/conversations/${conversation.id}`;
+        ? `/api/conversations/${conversation.agent}/${conversation.conversation_id}`
+        : `/api/conversations/${conversation.conversation_id}`;
 
       const res = await fetch(url);
 
       if (!res.ok) {
         if (res.status === 404) {
-          console.warn(`Conversation ${conversation.id} not found (404), removing from list.`);
-          setConversations((prev) => prev.filter((s) => s.id !== conversation.id));
-          if (selectedConversation?.id === conversation.id) {
+          console.warn(`Conversation ${conversation.conversation_id} not found (404), removing from list.`);
+          setConversations((prev) => prev.filter((s) => s.conversation_id !== conversation.conversation_id));
+          if (selectedConversation?.conversation_id === conversation.conversation_id) {
             setSelectedConversation(null);
           }
         } else {
@@ -231,7 +231,7 @@ export default function LogsPage() {
   }, [conversations]);
 
   const filteredConversations = conversations.filter((s) =>
-    s.id.toLowerCase().includes(searchQuery.toLowerCase())
+    s.conversation_id.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const getAgentColor = (agent: string) => {
@@ -262,7 +262,7 @@ export default function LogsPage() {
               <>
                 <h2 className="text-xl font-bold text-white flex items-center gap-2">
                   <span className="font-mono text-primary truncate">
-                    {selectedConversation.id?.slice(0, 12)}...
+                    {selectedConversation.conversation_id.slice(0, 12)}...
                   </span>
                   <span
                     className={`px-2 py-0.5 rounded text-xs font-medium border ${getAgentColor(
@@ -399,21 +399,21 @@ export default function LogsPage() {
               ) : (
                 filteredConversations.map((conversation) => (
                   <div
-                    key={conversation.id}
+                    key={conversation.conversation_id}
                     onClick={() => selectConversation(conversation)}
-                    className={`p-4 cursor-pointer border-b border-white/5 transition-colors ${selectedConversation?.id === conversation.id
+                    className={`p-4 cursor-pointer border-b border-white/5 transition-colors ${selectedConversation?.conversation_id === conversation.conversation_id
                       ? "border-l-4 border-l-primary bg-primary/5"
                       : "border-l-4 border-l-transparent hover:bg-white/[0.02]"
                       }`}
                   >
                     <div className="flex justify-between items-start mb-1">
                       <span
-                        className={`font-mono text-sm ${selectedConversation?.id === conversation.id
+                        className={`font-mono text-sm ${selectedConversation?.conversation_id === conversation.conversation_id
                           ? "font-semibold text-white"
                           : "font-medium text-gray-300"
                           }`}
                       >
-                        {conversation.id.slice(0, 12)}...
+                        {conversation.conversation_id.slice(0, 12)}...
                       </span>
                       <span className={`text-xs ${getStatusColor(conversation.status)}`}>
                         {conversation.status === "active"
