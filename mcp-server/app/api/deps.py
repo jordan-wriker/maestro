@@ -5,6 +5,7 @@ from app.services.agent_runner import AgentRunner
 from app.services.log_storage import LogStorageService
 from app.services.websocket_manager import WebSocketManager
 from app.services.batch_manager import BatchManager
+from app.services.db_service import DBService
 
 def get_agent_runner(request: Request) -> AgentRunner:
     return request.app.state.agent_runner
@@ -24,3 +25,7 @@ def get_app_state(request: Request):
 def get_db(session: Session = Depends(get_session)):
     """Dependency to get a database session."""
     yield session
+
+def get_db_service(session: Session = Depends(get_db)) -> DBService:
+    """Dependency to get a database service instance."""
+    return DBService(session)
