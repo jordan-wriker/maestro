@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { WebSocketProvider } from "@/providers/WebSocketProvider";
 import Sidebar from "@/components/Sidebar";
 import Dashboard from "@/pages/Dashboard";
+import Sessions from "@/pages/Sessions";
 import Logs from "@/pages/Logs";
 import Tools from "@/pages/Tools";
 import Batch from "@/pages/Batch";
@@ -18,6 +19,7 @@ function App() {
         <main className="flex-1 overflow-hidden relative z-10 flex flex-col">
           <Routes>
             <Route path="/" element={<Dashboard />} />
+            <Route path="/sessions" element={<Sessions />} />
             <Route path="/logs" element={<Logs />} />
             <Route path="/tools" element={<Tools />} />
             <Route path="/batch" element={<Batch />} />
