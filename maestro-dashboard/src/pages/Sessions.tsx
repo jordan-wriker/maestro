@@ -6,7 +6,7 @@ interface Session {
   status: "active" | "idle" | "archived";
   agents: { name: string; color: string }[];
   totalTokens: string;
-  duration: string;
+  lastActive: string;
 }
 
 const mockSessions: Session[] = [
@@ -19,7 +19,7 @@ const mockSessions: Session[] = [
       { name: "ChatGPT-4o", color: "emerald" },
     ],
     totalTokens: "1.2M",
-    duration: "14h 22m",
+    lastActive: "2 mins ago",
   },
   {
     id: "2",
@@ -27,7 +27,7 @@ const mockSessions: Session[] = [
     status: "idle",
     agents: [{ name: "OpenAI Codex", color: "purple" }],
     totalTokens: "450k",
-    duration: "02h 45m",
+    lastActive: "2 days ago",
   },
   {
     id: "3",
@@ -35,7 +35,7 @@ const mockSessions: Session[] = [
     status: "archived",
     agents: [{ name: "DALL-E 3", color: "orange" }],
     totalTokens: "12.4k",
-    duration: "01h 12m",
+    lastActive: "1 week ago",
   },
 ];
 
@@ -102,9 +102,8 @@ function SessionCard({ session }: { session: Session }) {
 
   return (
     <div
-      className={`bg-[#0f0f12] border border-white/5 rounded-2xl p-6 hover:border-primary/40 transition-all group flex flex-col h-full ${
-        isArchived ? "opacity-60 hover:opacity-100" : ""
-      }`}
+      className={`bg-[#0f0f12] border border-white/5 rounded-2xl p-6 hover:border-primary/40 transition-all group flex flex-col h-full ${isArchived ? "opacity-60 hover:opacity-100" : ""
+        }`}
     >
       {/* Header */}
       <div className="flex items-start justify-between mb-4">
@@ -145,8 +144,8 @@ function SessionCard({ session }: { session: Session }) {
           </p>
         </div>
         <div>
-          <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Active Duration</p>
-          <p className="text-sm font-mono font-semibold text-white">{session.duration}</p>
+          <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Last Active</p>
+          <p className="text-sm font-mono font-semibold text-white">{session.lastActive}</p>
         </div>
       </div>
 
