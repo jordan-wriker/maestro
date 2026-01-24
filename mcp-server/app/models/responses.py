@@ -1,5 +1,6 @@
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
+from app.models.work_session import WorkSession
 
 class AgentResponse(BaseModel):
     text: str
@@ -42,3 +43,6 @@ class ConversationDetail(BaseModel):
     status: str  # "completed", "error", or "active"
     prompt: str
     events: List[Dict[str, Any]]
+
+class SessionListResponse(BaseModel):
+    sessions: List[WorkSession]

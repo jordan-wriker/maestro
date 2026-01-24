@@ -27,7 +27,7 @@ from app.services.log_storage import LogStorageService
 from app.services.websocket_manager import WebSocketManager
 from app.services.batch_manager import BatchManager
 
-from app.api.routes import agent, batch, dashboard, websocket
+from app.api.routes import agent, batch, dashboard, websocket, sessions
 
 # Configure logging on module import
 configure_logging(
@@ -161,6 +161,7 @@ def create_app() -> FastAPI:
     app.include_router(batch.router)
     app.include_router(dashboard.router)
     app.include_router(websocket.router)
+    app.include_router(sessions.router)
     
     # Health check endpoint
     @app.get("/health")

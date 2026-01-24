@@ -1,5 +1,6 @@
 from typing import List, Optional
 from pydantic import BaseModel, Field
+from app.models.work_session import WorkSessionAgent
 
 class AgentRequest(BaseModel):
     prompt: str
@@ -19,3 +20,15 @@ class BatchSubmitRequest(BaseModel):
 class BatchStatusRequest(BaseModel):
     batch_id: str
     ack_task_ids: List[str] = []
+
+class CreateSessionRequest(BaseModel):
+    title: str
+    root_directory: Optional[str] = None
+    agents: Optional[List[WorkSessionAgent]] = None
+
+class UpdateSessionRequest(BaseModel):
+    title: Optional[str] = None
+    status: Optional[str] = None
+    root_directory: Optional[str] = None
+    agents: Optional[List[WorkSessionAgent]] = None
+    total_tokens: Optional[str] = None
