@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import ToggleBar from "@/components/ToggleBar";
 
-interface SessionSummary {
+interface ConversationSummary {
   id: string;
   agent: "claude" | "codex";
   created_at: string;
@@ -20,7 +20,7 @@ interface SessionEvent {
   timestamp?: string;
 }
 
-interface SessionDetail {
+interface ConversationDetail {
   id: string;
   agent: "claude" | "codex";
   created_at: string;
@@ -30,11 +30,11 @@ interface SessionDetail {
 }
 
 export default function LogsPage() {
-  const [sessions, setSessions] = useState<SessionSummary[]>([]);
-  const [selectedSession, setSelectedSession] = useState<SessionDetail | null>(null);
+  const [conversations, setConversations] = useState<ConversationSummary[]>([]);
+  const [selectedConversation, setSelectedConversation] = useState<ConversationDetail | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [filter, setFilter] = useState<"all" | "claude" | "codex">("all");
-  const [sessionsPanelCollapsed, setSessionsPanelCollapsed] = useState(false);
+  const [conversationsPanelCollapsed, setConversationsPanelCollapsed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [showThinking, setShowThinking] = useState(true);
@@ -50,9 +50,9 @@ export default function LogsPage() {
     // Get the most recent log entry
     const latestLog = liveLogs[0];
 
-    // Use session_id if available, otherwise use log id as temporary tracking id
-    // This allows "running" sessions to appear before they complete
-    const sessionId = latestLog.session_id || `temp_${latestLog.id}`;
+    // Use conversation_id if available, otherwise use log id as temporary tracking id
+    // This allows "running" conversations to appear before they complete
+    const conversationId = latestLog.conversation_id || `temp_${latestLog.id}`;
     const agent = latestLog.agent as "claude" | "codex";
     const isRunning = latestLog.status === "Running..." ||
       latestLog.status === "Running (Batch)..." ||
@@ -60,28 +60,28 @@ export default function LogsPage() {
     const status = isRunning ? "active" :
       latestLog.status === "Error" || latestLog.status === "Failed" ? "error" : "completed";
 
-    // Update sessions list
-    setSessions((prev) => {
-      // Check if this is a real session_id (not temporary)
-      const hasRealSessionId = latestLog.session_id && !latestLog.session_id.startsWith("temp_");
+    // Update conversations list
+    setConversations((prev) => {
+      // Check if this is a real conversation_id (not temporary)
+      const hasRealConversationId = latestLog.conversation_id && !latestLog.conversation_id.startsWith("temp_");
 
-      // Also look for a temporary session that may need to be replaced
-      // This happens when a task completes and we get the real session_id
-      const tempSessionId = `temp_${latestLog.id}`;
-      const tempIndex = hasRealSessionId ? prev.findIndex((s) => s.id === tempSessionId) : -1;
+      // Also look for a temporary conversation that may need to be replaced
+      // This happens when a task completes and we get the real conversation_id
+      const tempConversationId = `temp_${latestLog.id}`;
+      const tempIndex = hasRealConversationId ? prev.findIndex((s) => s.id === tempConversationId) : -1;
 
       let updated = [...prev];
 
-      // Remove temporary session if we now have a real session_id
-      if (tempIndex !== -1 && hasRealSessionId) {
-        updated = updated.filter((s) => s.id !== tempSessionId);
+      // Remove temporary conversation if we now have a real conversation_id
+      if (tempIndex !== -1 && hasRealConversationId) {
+        updated = updated.filter((s) => s.id !== tempConversationId);
       }
 
       // Recalculate existingIndex after potential removal
-      const finalExistingIndex = updated.findIndex((s) => s.id === sessionId);
+      const finalExistingIndex = updated.findIndex((s) => s.id === conversationId);
 
       if (finalExistingIndex !== -1) {
-        // Update existing session
+        // Update existing conversation
         updated[finalExistingIndex] = {
           ...updated[finalExistingIndex],
           status,
@@ -91,9 +91,9 @@ export default function LogsPage() {
         };
         return updated;
       } else {
-        // Add new session at the top
-        const newSession: SessionSummary = {
-          id: sessionId,
+        // Add new conversation at the top
+        const newConversation: ConversationSummary = {
+          id: conversationId,
           agent,
           created_at: latestLog.timestamp,
           status,
@@ -101,22 +101,22 @@ export default function LogsPage() {
           final_response: latestLog.final_response || "",
           last_activity: latestLog.timestamp,
         };
-        return [newSession, ...updated];
+        return [newConversation, ...updated];
       }
     });
 
-    // Update selectedSession if it matches the incoming log
-    setSelectedSession((prev) => {
+    // Update selectedConversation if it matches the incoming log
+    setSelectedConversation((prev) => {
       if (!prev) return prev;
 
-      // Match by session ID or by temporary ID (temp_<log.id>)
+      // Match by conversation ID or by temporary ID (temp_<log.id>)
       const tempId = `temp_${latestLog.id}`;
-      const matchesSession = prev.id === sessionId || prev.id === tempId;
+      const matchesConversation = prev.id === conversationId || prev.id === tempId;
 
-      if (!matchesSession) return prev;
+      if (!matchesConversation) return prev;
 
-      // If we now have a real session_id, update the prev.id
-      const newId = latestLog.session_id || prev.id;
+      // If we now have a real conversation_id, update the prev.id
+      const newId = latestLog.conversation_id || prev.id;
 
       // Build new events from the live log
       const newEvents: SessionEvent[] = [];
@@ -167,47 +167,47 @@ export default function LogsPage() {
     });
   }, [liveLogs]);
 
-  // Fetch sessions list
+  // Fetch conversations list
   useEffect(() => {
-    async function fetchSessions() {
+    async function fetchConversations() {
       try {
-        const res = await fetch(`/api/sessions?agent=${filter}`);
+        const res = await fetch(`/api/conversations?agent=${filter}`);
         const data = await res.json();
-        setSessions(data);
+        setConversations(data);
         setLoading(false);
       } catch (error) {
-        console.error("Failed to fetch sessions:", error);
+        console.error("Failed to fetch conversations:", error);
         setLoading(false);
       }
     }
-    fetchSessions();
+    fetchConversations();
   }, [filter]);
 
-  // Fetch session detail when selected
-  async function selectSession(session: SessionSummary) {
-    if (!session.id) return;
+  // Fetch conversation detail when selected
+  async function selectConversation(conversation: ConversationSummary) {
+    if (!conversation.id) return;
 
     setLoadingDetail(true);
-    // Optional: Clear or set a loading state for the current session
-    // setSelectedSession(null); 
+    // Optional: Clear or set a loading state for the current conversation
+    // setSelectedConversation(null); 
 
     try {
       // Use the agent-specific route if available, otherwise fallback to generic
-      const url = session.agent
-        ? `/api/sessions/${session.agent}/${session.id}`
-        : `/api/sessions/${session.id}`;
+      const url = conversation.agent
+        ? `/api/conversations/${conversation.agent}/${conversation.id}`
+        : `/api/conversations/${conversation.id}`;
 
       const res = await fetch(url);
 
       if (!res.ok) {
         if (res.status === 404) {
-          console.warn(`Session ${session.id} not found (404), removing from list.`);
-          setSessions((prev) => prev.filter((s) => s.id !== session.id));
-          if (selectedSession?.id === session.id) {
-            setSelectedSession(null);
+          console.warn(`Conversation ${conversation.id} not found (404), removing from list.`);
+          setConversations((prev) => prev.filter((s) => s.id !== conversation.id));
+          if (selectedConversation?.id === conversation.id) {
+            setSelectedConversation(null);
           }
         } else {
-          console.error(`Failed to fetch session detail: ${res.status} ${res.statusText}`);
+          console.error(`Failed to fetch conversation detail: ${res.status} ${res.statusText}`);
           // On other errors, we might want to alert the user or show an error state
         }
         setLoadingDetail(false);
@@ -215,22 +215,22 @@ export default function LogsPage() {
       }
 
       const data = await res.json();
-      setSelectedSession(data);
+      setSelectedConversation(data);
     } catch (error) {
-      console.error("Failed to fetch session detail:", error);
+      console.error("Failed to fetch conversation detail:", error);
     } finally {
       setLoadingDetail(false);
     }
   }
 
-  // Auto-select first session
+  // Auto-select first conversation
   useEffect(() => {
-    if (sessions.length > 0 && !selectedSession) {
-      selectSession(sessions[0]);
+    if (conversations.length > 0 && !selectedConversation) {
+      selectConversation(conversations[0]);
     }
-  }, [sessions]);
+  }, [conversations]);
 
-  const filteredSessions = sessions.filter((s) =>
+  const filteredConversations = conversations.filter((s) =>
     s.id.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
@@ -258,31 +258,31 @@ export default function LogsPage() {
         {/* Header */}
         <div className="h-16 border-b border-white/5 flex justify-between items-center px-6 bg-[#0c0c0e]/50 backdrop-blur-md sticky top-0 z-20">
           <div className="flex items-center gap-4 min-w-0">
-            {selectedSession ? (
+            {selectedConversation ? (
               <>
                 <h2 className="text-xl font-bold text-white flex items-center gap-2">
                   <span className="font-mono text-primary truncate">
-                    {selectedSession.id?.slice(0, 12)}...
+                    {selectedConversation.id?.slice(0, 12)}...
                   </span>
                   <span
                     className={`px-2 py-0.5 rounded text-xs font-medium border ${getAgentColor(
-                      selectedSession.agent
+                      selectedConversation.agent
                     )}`}
                   >
-                    {selectedSession.agent}
+                    {selectedConversation.agent}
                   </span>
-                  {selectedSession.status === "active" && (
+                  {selectedConversation.status === "active" && (
                     <span className="px-2 py-0.5 rounded text-xs font-medium bg-green-500/10 text-green-400 border border-green-500/20 flex-shrink-0">
                       LIVE
                     </span>
                   )}
                 </h2>
                 <span className="hidden md:inline text-sm text-gray-400 border-l border-white/10 pl-4 whitespace-nowrap">
-                  Started {selectedSession.created_at}
+                  Started {selectedConversation.created_at}
                 </span>
               </>
             ) : (
-              <h2 className="text-xl font-bold text-white">Select a session</h2>
+              <h2 className="text-xl font-bold text-white">Select a conversation</h2>
             )}
           </div>
           <div className="flex items-center gap-3">
@@ -299,23 +299,23 @@ export default function LogsPage() {
             <div className="flex items-center justify-center h-full">
               <div className="text-gray-400 flex items-center gap-2">
                 <span className="material-icons-round animate-spin">refresh</span>
-                Loading session...
+                Loading conversation...
               </div>
             </div>
-          ) : selectedSession ? (
-            (selectedSession.events || [])
+          ) : selectedConversation ? (
+            (selectedConversation.events || [])
               .filter((event) => {
                 if (!showThinking && (event.type === "thinking" || event.type === "reasoning")) return false;
                 if (!showTools && event.type === "tool_call") return false;
                 return true;
               })
               .map((event, i) => (
-                <EventBlock key={i} event={event} agent={selectedSession.agent} />
+                <EventBlock key={i} event={event} agent={selectedConversation.agent} />
               ))
           ) : (
             <div className="flex items-center justify-center h-full">
               <p className="text-gray-500">
-                {loading ? "Loading sessions..." : "No session selected"}
+                {loading ? "Loading conversations..." : "No conversation selected"}
               </p>
             </div>
           )}
@@ -327,7 +327,7 @@ export default function LogsPage() {
             <input
               type="text"
               disabled
-              value="Session is in view-only mode."
+              value="Conversation is in view-only mode."
               className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 pl-12 text-sm text-gray-400 cursor-not-allowed"
             />
             <span className="absolute left-4 top-3 text-gray-500">
@@ -337,26 +337,26 @@ export default function LogsPage() {
         </div>
       </div>
 
-      {/* Sessions Sidebar */}
+      {/* Conversations Sidebar */}
       <div
-        className={`${sessionsPanelCollapsed ? "w-12" : "w-80"
+        className={`${conversationsPanelCollapsed ? "w-12" : "w-80"
           } h-full flex flex-col border-l border-white/5 bg-[#0c0c0e] flex-shrink-0 transition-all duration-300`}
       >
         <div className="p-4 border-b border-white/5 flex justify-between items-center">
-          {!sessionsPanelCollapsed && (
-            <h2 className="text-lg font-bold text-white">Sessions</h2>
+          {!conversationsPanelCollapsed && (
+            <h2 className="text-lg font-bold text-white">Conversations</h2>
           )}
           <button
-            onClick={() => setSessionsPanelCollapsed(!sessionsPanelCollapsed)}
+            onClick={() => setConversationsPanelCollapsed(!conversationsPanelCollapsed)}
             className="text-gray-400 hover:text-gray-200 transition-colors"
           >
             <span className="material-icons-round">
-              {sessionsPanelCollapsed ? "chevron_left" : "chevron_right"}
+              {conversationsPanelCollapsed ? "chevron_left" : "chevron_right"}
             </span>
           </button>
         </div>
 
-        {!sessionsPanelCollapsed && (
+        {!conversationsPanelCollapsed && (
           <>
             {/* Search and Filter */}
             <div className="p-4 pt-2 border-b border-white/5">
@@ -368,7 +368,7 @@ export default function LogsPage() {
                 </span>
                 <input
                   type="text"
-                  placeholder="Search Session ID..."
+                  placeholder="Search Conversation ID..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="block w-full pl-10 pr-3 py-2 border border-white/10 rounded-lg leading-5 bg-[#151519] text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-sm"
@@ -390,54 +390,54 @@ export default function LogsPage() {
               </div>
             </div>
 
-            {/* Sessions List */}
+            {/* Conversations List */}
             <div className="flex-1 overflow-y-auto min-h-0">
               {loading ? (
                 <div className="p-4 text-center text-gray-500">Loading...</div>
-              ) : filteredSessions.length === 0 ? (
-                <div className="p-4 text-center text-gray-500">No sessions found</div>
+              ) : filteredConversations.length === 0 ? (
+                <div className="p-4 text-center text-gray-500">No conversations found</div>
               ) : (
-                filteredSessions.map((session) => (
+                filteredConversations.map((conversation) => (
                   <div
-                    key={session.id}
-                    onClick={() => selectSession(session)}
-                    className={`p-4 cursor-pointer border-b border-white/5 transition-colors ${selectedSession?.id === session.id
+                    key={conversation.id}
+                    onClick={() => selectConversation(conversation)}
+                    className={`p-4 cursor-pointer border-b border-white/5 transition-colors ${selectedConversation?.id === conversation.id
                       ? "border-l-4 border-l-primary bg-primary/5"
                       : "border-l-4 border-l-transparent hover:bg-white/[0.02]"
                       }`}
                   >
                     <div className="flex justify-between items-start mb-1">
                       <span
-                        className={`font-mono text-sm ${selectedSession?.id === session.id
+                        className={`font-mono text-sm ${selectedConversation?.id === conversation.id
                           ? "font-semibold text-white"
                           : "font-medium text-gray-300"
                           }`}
                       >
-                        {session.id.slice(0, 12)}...
+                        {conversation.id.slice(0, 12)}...
                       </span>
-                      <span className={`text-xs ${getStatusColor(session.status)}`}>
-                        {session.status === "active"
+                      <span className={`text-xs ${getStatusColor(conversation.status)}`}>
+                        {conversation.status === "active"
                           ? "Active"
-                          : session.status === "error"
+                          : conversation.status === "error"
                             ? "Error"
                             : "Completed"}
                       </span>
                     </div>
                     <div className="text-xs text-gray-400 mb-2">
-                      {session.created_at}
+                      {conversation.created_at}
                     </div>
                     <div className="flex items-center gap-2 flex-wrap">
                       <span
                         className={`px-2 py-0.5 rounded text-[10px] font-medium border ${getAgentColor(
-                          session.agent
+                          conversation.agent
                         )}`}
                       >
-                        {session.agent}
+                        {conversation.agent}
                       </span>
                     </div>
-                    {session.task && (
+                    {conversation.task && (
                       <p className="text-xs text-gray-500 mt-2 line-clamp-2">
-                        {session.task.slice(0, 80)}...
+                        {conversation.task.slice(0, 80)}...
                       </p>
                     )}
                   </div>
