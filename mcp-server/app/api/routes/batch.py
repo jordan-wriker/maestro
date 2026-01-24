@@ -18,7 +18,8 @@ async def submit_batch(
     app_state: AppState = Depends(get_app_state),
     db_service: DBService = Depends(get_db_service)
 ):
-    batch_id = str(uuid.uuid4())
+    # Generate BCH ID: BCH-XXXX-X
+    batch_id = f"BCH-{uuid.uuid4().hex[:4]}-{uuid.uuid4().hex[:1]}".upper()
     
     # Get current session ID
     session_id = await app_state.get_current_session_id()
@@ -114,5 +115,18 @@ async def list_batches(
     if not session_id:
         raise HTTPException(status_code=403, detail="No active session found")
         
-    batches = db_service.list_batches_by_session(session_id)
-    return batches
+    db_batches = db_service.list_batches_by_session(session_id)
+    
+    response_batches = []
+    for b in db_batches:
+        # Get tasks for this batch
+        tasks = db_service.get_batch_tasks(b.batch_id)
+        # Convert to dicts for the response
+        task_dicts = [t.model_dump() if hasattr(t, 'model_dump') else t.dict() for t in tasks]
+        
+        # Create response object
+        batch_dict = b.model_dump() if hasattr(b, 'model_dump') else b.dict()
+        batch_dict['tasks'] = task_dicts
+        response_batches.append(BatchResponse(**batch_dict))
+        
+    return response_batches

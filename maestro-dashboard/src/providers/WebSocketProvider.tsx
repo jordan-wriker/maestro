@@ -1,5 +1,5 @@
 import React, { createContext, useEffect, useState } from "react";
-import { WorkSession } from "../types/api";
+import type { WorkSession } from "../types/api";
 
 export interface LogEntry {
     id: number;

@@ -24,6 +24,7 @@ class BatchResponse(BaseModel):
     total_tasks: int
     completed_tasks: int
     progress: float
+    tasks: List[Dict[str, Any]] = []
     created_at: datetime
     updated_at: datetime
 

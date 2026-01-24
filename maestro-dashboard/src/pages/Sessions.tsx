@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useWebSocket } from "@/hooks/useWebSocket";
-import { WorkSession } from "../types/api";
+import type { WorkSession } from "../types/api";
 
 const agentColorClasses: Record<string, { bg: string; border: string; text: string; dot: string }> = {
   blue: {
@@ -238,7 +238,7 @@ export default function Sessions() {
   const [searchQuery, setSearchQuery] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  const { refreshSessions, setCurrentSession } = useWebSocket();
+  const { setCurrentSession } = useWebSocket();
 
   const fetchSessions = async () => {
     setLoading(true);

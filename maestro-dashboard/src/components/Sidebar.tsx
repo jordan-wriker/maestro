@@ -11,7 +11,7 @@ const navItems = [
 ];
 
 const configItems = [
-  { href: "#", label: "Settings", icon: "settings" },
+  { href: "/settings", label: "Settings", icon: "settings" },
   { href: "#", label: "API Keys", icon: "key" },
 ];
 

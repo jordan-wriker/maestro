@@ -16,6 +16,15 @@ export interface WorkSession {
     updated_at: string;
 }
 
+export interface BatchTask {
+    task_id: string;
+    batch_id: string;
+    status: string;
+    result?: any;
+    created_at?: string;
+    updated_at?: string;
+}
+
 export interface Batch {
     batch_id: string;
     session_id: string;
@@ -23,6 +32,7 @@ export interface Batch {
     total_tasks: number;
     completed_tasks: number;
     progress: number;
+    tasks: BatchTask[];
     created_at: string;
     updated_at: string;
 }

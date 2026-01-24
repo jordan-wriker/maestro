@@ -1,7 +1,7 @@
 import json
 from datetime import datetime
 from typing import Dict, Any, List, Optional
-from sqlmodel import Session, select
+from sqlmodel import Session, select, delete
 from app.db.models import WorkSession as DBWorkSession, Conversation, Batch, BatchTaskEntity
 from app.models.work_session import WorkSession, WorkSessionAgent
 from app.core.logging import get_logger
@@ -313,6 +313,24 @@ class DBService:
         """Get all tasks for a batch."""
         statement = select(BatchTaskEntity).where(BatchTaskEntity.batch_id == batch_id)
         return self.session.exec(statement).all()
+
+    # --- System Methods ---
+
+    def clear_all_data(self) -> None:
+        """Clear all data from the database."""
+        try:
+            # Delete in order of dependency (child first)
+            self.session.exec(delete(BatchTaskEntity))
+            self.session.exec(delete(Conversation))  # Conversations might link to batches
+            self.session.exec(delete(Batch))
+            self.session.exec(delete(DBWorkSession))
+            
+            self.session.commit()
+            logger.info("Cleared all database data")
+        except Exception as e:
+            self.session.rollback()
+            logger.error("Failed to clear database data", error=str(e))
+            raise
 
     # --- Helpers ---
 

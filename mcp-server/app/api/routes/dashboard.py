@@ -167,3 +167,17 @@ async def get_conversation_detail_legacy(
 ):
     return await _get_conversation_detail(conversation_id, log_storage, agent)
 
+
+@router.post("/api/admin/clear-database")
+async def clear_database(
+    db_service: DBService = Depends(get_db_service),
+    app_state: AppState = Depends(get_app_state)
+):
+    """
+    Clear all data from the database.
+    This includes sessions, conversations, batches, and tasks.
+    Also clears in-memory call history.
+    """
+    db_service.clear_all_data()
+    await app_state.clear_call_history()
+    return {"status": "success", "message": "Database cleared successfully"}

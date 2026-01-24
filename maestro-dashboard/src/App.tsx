@@ -6,6 +6,7 @@ import Sessions from "@/pages/Sessions";
 import Logs from "@/pages/Logs";
 import Tools from "@/pages/Tools";
 import Batch from "@/pages/Batch";
+import Settings from "@/pages/Settings";
 
 function App() {
   return (
@@ -23,6 +24,7 @@ function App() {
             <Route path="/logs" element={<Logs />} />
             <Route path="/tools" element={<Tools />} />
             <Route path="/batch" element={<Batch />} />
+            <Route path="/settings" element={<Settings />} />
             {/* Catch-all redirect to dashboard */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

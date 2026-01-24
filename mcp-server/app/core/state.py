@@ -38,6 +38,12 @@ class AppState:
         """Get a copy of call history (thread-safe)."""
         async with self._call_history_lock:
             return list(self._call_history)
+
+    async def clear_call_history(self) -> None:
+        """Clear the call history (thread-safe)."""
+        async with self._call_history_lock:
+            self._call_history.clear()
+
     
     async def update_latest_call(self, updates: Dict[str, Any]) -> None:
         """Update the most recent call history entry (thread-safe). DEPRECATED, use update_call_by_id."""

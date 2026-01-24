@@ -147,9 +147,10 @@ class LogStorageService:
         except Exception as e:
             logger.warning("Failed to update conversation response in database", conversation_id=conversation_id, error=str(e))
 
-    async def load_logs_from_files(self) -> List[Dict[str, Any]]:
+    async def load_logs_from_files(self, session_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """
         Load recent logs from files into AppState on startup.
+        If session_id is provided, only loads logs for that session.
         """
         all_logs = []
         
@@ -175,6 +176,11 @@ class LogStorageService:
                             if isinstance(log, dict):
                                 # Ensure session_id exists for older logs
                                 log.setdefault("session_id", None)
+                                
+                                # Filter by session ID if provided
+                                if session_id and log.get("session_id") != session_id:
+                                    continue
+                                    
                                 all_logs.append(log)
                 except (json.JSONDecodeError, KeyError, Exception) as e:
                     logger.warning(f"Skipping corrupted log file {log_file}: {e}")

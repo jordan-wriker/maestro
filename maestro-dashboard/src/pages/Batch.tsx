@@ -1,12 +1,8 @@
 import { useState, useEffect } from "react";
 import { useWebSocket } from "@/hooks/useWebSocket";
-import { Batch as APIBatch } from "../types/api";
+import type { Batch as APIBatch } from "../types/api";
 
-interface SubTask {
-  name: string;
-  model: string;
-  status: "completed" | "running" | "queued";
-}
+
 
 interface LogEntry {
   time: string;
@@ -126,7 +122,7 @@ export default function BatchPage() {
   }, [currentSession, autoRefresh]);
 
   return (
-    <div className="p-8 max-w-7xl mx-auto h-full overflow-y-auto space-y-8">
+    <div className="p-4 h-full overflow-y-auto space-y-4">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
@@ -137,7 +133,7 @@ export default function BatchPage() {
         </div>
         <div className="flex items-center gap-3">
           <button
-            onClick={fetchBatches}
+            onClick={() => fetchBatches()}
             className="bg-white/5 hover:bg-white/10 border border-white/10 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2"
           >
             <span className="material-icons-round text-lg">refresh</span>
@@ -226,7 +222,7 @@ export default function BatchPage() {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-3 mb-2 flex-wrap">
                             <span className={`font-mono text-sm font-bold ${statusConfig.idColor}`}>
-                              #{batch.batch_id.slice(0, 8)}
+                              #{batch.batch_id}
                             </span>
                             <span className="text-xs text-gray-500">
                               Updated: {new Date(batch.updated_at).toLocaleTimeString()}
@@ -265,6 +261,55 @@ export default function BatchPage() {
                         </div>
                       </div>
                     </div>
+
+                    {/* Sub-agent Workflow - Only for processing/running batches */}
+                    {(batch.status.toLowerCase() === "running" || batch.status.toLowerCase() === "processing") && (
+                      <div className="mt-6 pt-6 border-t border-white/5 px-6">
+                        <div className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+                          <span className="material-icons-round text-sm">hub</span>
+                          Sub-agent Workflow
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                          {batch.tasks && batch.tasks.map((task) => {
+                            const isTaskCompleted = ["completed", "success"].includes(task.status.toLowerCase());
+                            const isTaskRunning = ["running", "processing"].includes(task.status.toLowerCase());
+                            const isTaskFailed = ["failed", "error"].includes(task.status.toLowerCase());
+
+                            let cardClass = "bg-white/[0.02] border-white/5 opacity-50";
+                            let dotClass = "bg-gray-600";
+                            let statusText = "QUEUED";
+                            let statusColor = "text-gray-500";
+
+                            if (isTaskCompleted) {
+                              cardClass = "bg-white/[0.02] border-white/5";
+                              dotClass = "bg-green-500 shadow-[0_0_10px_rgba(74,222,128,0.4)]";
+                              statusText = "COMPLETED";
+                              statusColor = "text-gray-500"; // Based on code.html mock
+                            } else if (isTaskRunning) {
+                              cardClass = "bg-white/[0.05] border-primary/30";
+                              dotClass = "bg-primary animate-pulse shadow-[0_0_20px_rgba(124,58,237,0.4)]";
+                              statusText = "RUNNING";
+                              statusColor = "text-primary font-bold";
+                            } else if (isTaskFailed) {
+                              cardClass = "bg-red-500/5 border-red-500/20";
+                              dotClass = "bg-red-500";
+                              statusText = "FAILED";
+                              statusColor = "text-red-400 font-bold";
+                            }
+
+                            return (
+                              <div key={task.task_id} className={`p-3 border rounded-xl flex items-center gap-3 ${cardClass}`}>
+                                <div className={`w-2 h-2 rounded-full ${dotClass}`}></div>
+                                <div className="min-w-0">
+                                  <p className="text-xs font-medium text-white truncate">Task: {task.task_id}</p>
+                                  <p className={`text-[10px] uppercase ${statusColor}`}>{statusText}</p>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })

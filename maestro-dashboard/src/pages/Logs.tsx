@@ -172,8 +172,10 @@ export default function LogsPage() {
     async function fetchConversations() {
       if (!currentSession) {
         setConversations([]);
+        setSelectedConversation(null);
         return;
       }
+      setSelectedConversation(null);
       setLoading(true);
       try {
         const res = await fetch(`/api/conversations?agent=${filter}&session_id=${currentSession.session_id}`);
@@ -209,11 +211,23 @@ export default function LogsPage() {
 
       if (!res.ok) {
         if (res.status === 404) {
-          console.warn(`Conversation ${conversation.conversation_id} not found (404), removing from list.`);
-          setConversations((prev) => prev.filter((s) => s.conversation_id !== conversation.conversation_id));
-          if (selectedConversation?.conversation_id === conversation.conversation_id) {
-            setSelectedConversation(null);
-          }
+          console.warn(`Conversation ${conversation.conversation_id} not found (404).`);
+          // Do not remove from list even if not found, to prevent UI jumping
+          // Just show a skeletal state
+          setSelectedConversation({
+            conversation_id: conversation.conversation_id,
+            agent: conversation.agent,
+            created_at: conversation.created_at,
+            status: conversation.status,
+            task: conversation.task,
+            events: [
+              {
+                type: "system",
+                content: "Log file not found on server. The task may have failed to write logs or they were deleted.",
+                timestamp: new Date().toISOString()
+              }
+            ]
+          });
         } else {
           console.error(`Failed to fetch conversation detail: ${res.status} ${res.statusText}`);
           // On other errors, we might want to alert the user or show an error state

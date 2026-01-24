@@ -106,7 +106,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
     agent_runner = AsyncSubprocessRunner()
     log_storage = LogStorageService(app_state)
     websocket_manager = WebSocketManager(app_state)
-    batch_manager = BatchManager(app_state, agent_runner)
+    batch_manager = BatchManager(app_state, agent_runner, log_storage)
     
     # Store in app.state for dependency injection
     app.state.agent_runner = agent_runner
@@ -115,7 +115,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
     app.state.batch_manager = batch_manager
     
     # Load existing logs into memory
-    await log_storage.load_logs_from_files()
+    await log_storage.load_logs_from_files(session_id=current_session.session_id)
     
     logger.info("Application startup complete")
     
