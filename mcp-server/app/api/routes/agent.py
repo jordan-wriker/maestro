@@ -27,9 +27,9 @@ async def run_claude(
     # Critical: Generate unique log ID before async operations
     log_id = int(datetime.now().timestamp() * 1000) + (int(uuid.uuid4()) % 1000)
     start_time = datetime.now()
-    # Check if new session before any assignment
-    is_new_session = request.session_id is None
-    session_id = request.session_id
+    # Check if new conversation before any assignment
+    is_new_conversation = request.conversation_id is None
+    conversation_id = request.conversation_id
     
     # Create initial log entry
     initial_log = LogEntry(
@@ -40,7 +40,7 @@ async def run_claude(
         task=request.prompt,
         details="Agent starting...",
         events=[],
-        session_id=request.session_id
+        conversation_id=request.conversation_id
     )
     
     # Add to state and broadcast
@@ -50,8 +50,8 @@ async def run_claude(
     try:
         # Run agent
         args = ["--print", "--output-format=json", "--dangerously-skip-permissions", "--verbose"]
-        if request.session_id:
-            args.append(f"--resume={request.session_id}")
+        if request.conversation_id:
+            args.append(f"--resume={request.conversation_id}")
         args.append(request.prompt)
 
         stdout, stderr, exit_code = await agent_runner.run_agent(
@@ -61,7 +61,7 @@ async def run_claude(
         )
         
         # Parse output
-        events, extracted_session_id = parse_claude_events(stdout, request.prompt)
+        events, extracted_conversation_id = parse_claude_events(stdout, request.prompt)
         
         # Determine status
         status = "Completed" if exit_code == 0 else "Failed"
@@ -69,11 +69,11 @@ async def run_claude(
             # If failed and no events, add stderr as detail
             initial_log.details = stderr or "Unknown error"
             
-        # Determine final session_id
-        if not session_id and extracted_session_id:
-             session_id = extracted_session_id
-        elif not session_id:
-             session_id = str(uuid.uuid4())
+        # Determine final conversation_id
+        if not conversation_id and extracted_conversation_id:
+             conversation_id = extracted_conversation_id
+        elif not conversation_id:
+             conversation_id = str(uuid.uuid4())
 
         # Extract response text
         response_text = ""
@@ -86,7 +86,7 @@ async def run_claude(
         final_log = initial_log.model_copy(update={
             "status": status,
             "events": events,
-            "session_id": session_id,
+            "conversation_id": conversation_id,
             "final_response": response_text
         })
         
@@ -96,15 +96,15 @@ async def run_claude(
         # Save to file and db
         duration_ms = int((datetime.now() - start_time).total_seconds() * 1000)
         
-        await log_storage.save_log_to_file("claude", str(session_id), final_log.model_dump(), is_new_session)
-        await log_storage.log_to_database("claude", request.prompt, final_log.status, duration_ms, str(session_id))
+        await log_storage.save_log_to_file("claude", str(conversation_id), final_log.model_dump(), is_new_conversation)
+        await log_storage.log_to_database("claude", request.prompt, final_log.status, duration_ms, str(conversation_id))
         
         # Broadcast final
         await websocket_manager.broadcast_log_update(final_log.model_dump())
         
         return AgentResponse(
             text=response_text,
-            session_id=session_id
+            conversation_id=conversation_id
         )
         
     except Exception as e:
@@ -119,7 +119,7 @@ async def run_claude(
         
         return AgentResponse(
             text="",
-            session_id=request.session_id,
+            conversation_id=request.conversation_id,
             error=str(e)
         )
 
@@ -134,8 +134,8 @@ async def run_codex(
     # Critical: Generate unique log ID before async operations
     log_id = int(datetime.now().timestamp() * 1000) + (int(uuid.uuid4()) % 1000)
     start_time = datetime.now()
-    is_new_session = request.session_id is None
-    session_id = request.session_id
+    is_new_conversation = request.conversation_id is None
+    conversation_id = request.conversation_id
     
     # Create initial log entry
     initial_log = LogEntry(
@@ -146,7 +146,7 @@ async def run_codex(
         task=request.prompt,
         details="Agent starting...",
         events=[],
-        session_id=request.session_id
+        conversation_id=request.conversation_id
     )
     
     # Add to state and broadcast
@@ -156,8 +156,8 @@ async def run_codex(
     try:
         # Run agent
         args = ["exec", "--json", "--dangerously-bypass-approvals-and-sandbox", "--skip-git-repo-check"]
-        if request.session_id:
-             args.extend(["resume", request.session_id, request.prompt])
+        if request.conversation_id:
+             args.extend(["resume", request.conversation_id, request.prompt])
         else:
              args.append(request.prompt)
 
@@ -168,16 +168,16 @@ async def run_codex(
         )
         
         # Parse output
-        events, extracted_session_id = parse_codex_events(stdout, request.prompt)
+        events, extracted_conversation_id = parse_codex_events(stdout, request.prompt)
         
         # Determine status
         status = "Completed" if exit_code == 0 else "Failed"
         
-        # Update session_id if found
-        if not session_id and extracted_session_id:
-             session_id = extracted_session_id
-        elif not session_id:
-             session_id = str(uuid.uuid4())
+        # Update conversation_id if found
+        if not conversation_id and extracted_conversation_id:
+             conversation_id = extracted_conversation_id
+        elif not conversation_id:
+             conversation_id = str(uuid.uuid4())
 
         # Extract response text
         full_text = []
@@ -191,7 +191,7 @@ async def run_codex(
         final_log = initial_log.model_copy(update={
             "status": status,
             "events": events,
-            "session_id": session_id,
+            "conversation_id": conversation_id,
             "final_response": response_text
         })
         
@@ -203,15 +203,15 @@ async def run_codex(
         
         # Save to file and db
         duration_ms = int((datetime.now() - start_time).total_seconds() * 1000)
-        await log_storage.save_log_to_file("codex", str(session_id), final_log.model_dump(), is_new_session)
-        await log_storage.log_to_database("codex", request.prompt, final_log.status, duration_ms, str(session_id))
+        await log_storage.save_log_to_file("codex", str(conversation_id), final_log.model_dump(), is_new_conversation)
+        await log_storage.log_to_database("codex", request.prompt, final_log.status, duration_ms, str(conversation_id))
         
         # Broadcast final
         await websocket_manager.broadcast_log_update(final_log.model_dump())
 
         return AgentResponse(
             text=response_text,
-            session_id=session_id
+            conversation_id=conversation_id
         )
         
     except Exception as e:
@@ -225,6 +225,6 @@ async def run_codex(
         
         return AgentResponse(
             text="",
-            session_id=request.session_id,
+            conversation_id=request.conversation_id,
             error=str(e)
         )

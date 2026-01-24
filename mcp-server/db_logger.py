@@ -10,7 +10,7 @@ from pathlib import Path
 from datetime import datetime
 
 
-def log_request_to_db(agent: str, prompt: str, status: str, duration: int, session_id: str) -> None:
+def log_request_to_db(agent: str, prompt: str, status: str, duration: int, conversation_id: str) -> None:
     """
     Log a request to the SQLite database.
 
@@ -19,7 +19,7 @@ def log_request_to_db(agent: str, prompt: str, status: str, duration: int, sessi
         prompt: The prompt/instruction sent to the agent
         status: The status of the request (e.g., "success", "error")
         duration: The duration of the request in milliseconds
-        session_id: The session ID for the agent conversation
+        conversation_id: The conversation ID for the agent conversation
     """
     # Resolve the path to dev.db relative to this file's location
     # db_logger.py is in mcp-server/, dev.db is in ../mcp-dashboard/prisma/dev.db
@@ -36,13 +36,13 @@ def log_request_to_db(agent: str, prompt: str, status: str, duration: int, sessi
         cursor = conn.cursor()
 
         # Insert into TaskLog table
-        # Fields: id (auto), agent, prompt, status, duration, sessionId, createdAt
+        # Fields: id (auto), agent, prompt, status, duration, conversationId, createdAt
         cursor.execute(
             """
-            INSERT INTO TaskLog (agent, prompt, status, duration, sessionId, createdAt)
+            INSERT INTO TaskLog (agent, prompt, status, duration, conversationId, createdAt)
             VALUES (?, ?, ?, ?, ?, ?)
             """,
-            (agent, prompt, status, duration, session_id, datetime.utcnow().isoformat())
+            (agent, prompt, status, duration, conversation_id, datetime.utcnow().isoformat())
         )
 
         conn.commit()

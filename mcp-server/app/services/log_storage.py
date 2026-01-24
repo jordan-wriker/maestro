@@ -241,7 +241,7 @@ class LogStorageService:
                         status = "active"
                     
                     conversations.append({
-                        "id": s_id,
+                        "conversation_id": s_id,
                         "agent": str(data.get("agent") or agent_name),
                         "created_at": str(data.get("created_at") or last_log.get("timestamp") or ""),
                         "status": status,
