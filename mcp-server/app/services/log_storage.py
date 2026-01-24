@@ -173,6 +173,8 @@ class LogStorageService:
                     if isinstance(logs, list):
                         for log in logs:
                             if isinstance(log, dict):
+                                # Ensure session_id exists for older logs
+                                log.setdefault("session_id", None)
                                 all_logs.append(log)
                 except (json.JSONDecodeError, KeyError, Exception) as e:
                     logger.warning(f"Skipping corrupted log file {log_file}: {e}")

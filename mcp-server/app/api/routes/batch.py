@@ -53,12 +53,22 @@ async def submit_batch(
 @router.post("/batch/status", response_model=BatchStatusResponse)
 async def get_batch_status(
     request: BatchStatusRequest,
-    db_service: DBService = Depends(get_db_service)
+    db_service: DBService = Depends(get_db_service),
+    app_state: AppState = Depends(get_app_state)
 ):
+    # Get current session ID
+    session_id = await app_state.get_current_session_id()
+    if not session_id:
+        raise HTTPException(status_code=403, detail="No active session found")
+
     # Query batch from database
     db_batch = db_service.get_batch(request.batch_id)
     if not db_batch:
         raise HTTPException(status_code=404, detail="Batch not found")
+        
+    # Verify session ownership
+    if db_batch.session_id != session_id:
+        raise HTTPException(status_code=403, detail="Access denied: Batch belongs to another session")
         
     # Process acknowledgments in DB
     for task_id in request.ack_task_ids:

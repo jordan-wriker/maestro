@@ -10,17 +10,35 @@ from app.core.state import AppState
 router = APIRouter()
 
 @router.get("/api/logs", response_model=List[LogEntry])
-async def get_logs(app_state: AppState = Depends(get_app_state)):
-    history = await app_state.get_call_history()
-    # Ensure compatibility with LogEntry model
-    return [LogEntry(**entry) if isinstance(entry, dict) else entry for entry in history]
-
-@router.get("/api/stats")
-async def get_stats(app_state: AppState = Depends(get_app_state)):
+async def get_logs(
+    session_id: Optional[str] = Query(None, description="Filter by session ID. If not provided, uses current session"),
+    app_state: AppState = Depends(get_app_state)
+):
     history = await app_state.get_call_history()
     
-    claude_tasks = sum(1 for entry in history if entry.get("agent") == "claude")
-    codex_tasks = sum(1 for entry in history if entry.get("agent") == "codex")
+    if session_id is None:
+        session_id = await app_state.get_current_session_id()
+    
+    # Filter history by session_id
+    filtered_history = [entry for entry in history if entry.get("session_id") == session_id]
+    
+    # Ensure compatibility with LogEntry model
+    return [LogEntry(**entry) if isinstance(entry, dict) else entry for entry in filtered_history]
+
+@router.get("/api/stats")
+async def get_stats(
+    session_id: Optional[str] = Query(None, description="Filter by session ID. If not provided, uses current session"),
+    app_state: AppState = Depends(get_app_state)
+):
+    history = await app_state.get_call_history()
+    
+    if session_id is None:
+        session_id = await app_state.get_current_session_id()
+        
+    filtered_history = [entry for entry in history if entry.get("session_id") == session_id]
+    
+    claude_tasks = sum(1 for entry in filtered_history if entry.get("agent") == "claude")
+    codex_tasks = sum(1 for entry in filtered_history if entry.get("agent") == "codex")
     
     # Placeholder for average latency if not tracked
     avg_latency = 1500 
@@ -34,11 +52,17 @@ async def get_stats(app_state: AppState = Depends(get_app_state)):
 @router.get("/api/conversations", response_model=List[ConversationSummary])
 async def list_conversations(
     agent: str = Query("all", description="Filter by agent"),
+    session_id: Optional[str] = Query(None, description="Filter by session ID. If not provided, uses current session"),
     log_storage: LogStorageService = Depends(get_log_storage),
     app_state: AppState = Depends(get_app_state),
     db_service: DBService = Depends(get_db_service)
 ):
-    session_id = await app_state.get_current_session_id()
+    if session_id is None:
+        session_id = await app_state.get_current_session_id()
+    
+    if session_id is None:
+        return []
+        
     conversations = await log_storage.list_conversations(agent, session_id=session_id, db_service=db_service)
     return conversations
 

@@ -48,7 +48,8 @@ async def run_claude(
         task=request.prompt,
         details="Agent starting...",
         events=[],
-        conversation_id=request.conversation_id
+        conversation_id=request.conversation_id,
+        session_id=session_id
     )
     
     # Add to state and broadcast
@@ -95,7 +96,7 @@ async def run_claude(
             "status": status,
             "events": events,
             "conversation_id": conversation_id,
-            "final_response": response_text
+            "final_response": response_text, "session_id": session_id
         })
         
         # Update state
@@ -119,7 +120,7 @@ async def run_claude(
     except Exception as e:
         logger.error(f"Error running claude agent: {e}")
         # Update log to error
-        error_log = initial_log.model_copy()
+        error_log = initial_log.model_copy(update={"session_id": session_id})
         error_log.status = "Error"
         error_log.details = str(e)
         
@@ -170,7 +171,8 @@ async def run_codex(
         task=request.prompt,
         details="Agent starting...",
         events=[],
-        conversation_id=request.conversation_id
+        conversation_id=request.conversation_id,
+        session_id=session_id
     )
     
     # Add to state and broadcast
@@ -216,7 +218,8 @@ async def run_codex(
             "status": status,
             "events": events,
             "conversation_id": conversation_id,
-            "final_response": response_text
+            "final_response": response_text,
+            "session_id": session_id
         })
         
         if exit_code != 0 and stderr:
@@ -241,7 +244,7 @@ async def run_codex(
         
     except Exception as e:
         logger.error(f"Error running codex agent: {e}")
-        error_log = initial_log.model_copy()
+        error_log = initial_log.model_copy(update={"session_id": session_id})
         error_log.status = "Error"
         error_log.details = str(e)
         

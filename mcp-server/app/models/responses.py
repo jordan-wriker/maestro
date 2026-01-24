@@ -26,6 +26,7 @@ class LogEntry(BaseModel):
     events: Optional[List[Dict[str, Any]]] = None
     final_response: Optional[str] = None
     conversation_id: Optional[str] = None
+    session_id: Optional[str] = None
 
 class ConversationSummary(BaseModel):
     conversation_id: str
