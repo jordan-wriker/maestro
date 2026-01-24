@@ -47,3 +47,12 @@ class Conversation(SQLModel, table=True):
     response: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
     last_activity: datetime = Field(default_factory=datetime.utcnow)
+
+class BatchTaskEntity(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    task_id: str = Field(index=True)
+    batch_id: str = Field(foreign_key="batch.batch_id", index=True)
+    status: str  # "pending", "running", "completed", "failed", "fetched"
+    result: Optional[str] = None  # JSON string
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)

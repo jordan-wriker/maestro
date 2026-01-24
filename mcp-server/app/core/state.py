@@ -20,10 +20,6 @@ class AppState:
         self._call_history: deque = deque(maxlen=50)
         self._call_history_lock = asyncio.Lock()
         
-        # Batch execution tracking
-        self._batches: Dict[str, Dict[str, Any]] = {}
-        self._batches_lock = asyncio.Lock()
-        
         # WebSocket client connections (client_id -> WebSocket)
         self._connected_clients: Dict[str, Any] = {}
         self._clients_lock = asyncio.Lock()
@@ -56,42 +52,6 @@ class AppState:
                 if entry.get("id") == log_id:
                     entry.update(updates)
                     break
-    
-    # Batch Management
-    async def create_batch(self, batch_id: str, batch_data: Dict[str, Any]) -> None:
-        """Create a new batch (thread-safe)."""
-        async with self._batches_lock:
-            self._batches[batch_id] = batch_data
-    
-    async def get_batch(self, batch_id: str) -> Optional[Dict[str, Any]]:
-        """Get batch data (thread-safe)."""
-        async with self._batches_lock:
-            return self._batches.get(batch_id)
-    
-    async def update_batch_task(
-        self, 
-        batch_id: str, 
-        task_id: str, 
-        updates: Dict[str, Any]
-    ) -> None:
-        """Update a specific task in a batch (thread-safe)."""
-        async with self._batches_lock:
-            if batch_id in self._batches:
-                if "tasks" in self._batches[batch_id]:
-                    if task_id in self._batches[batch_id]["tasks"]:
-                        self._batches[batch_id]["tasks"][task_id].update(updates)
-    
-    async def batch_exists(self, batch_id: str) -> bool:
-        """Check if batch exists (thread-safe)."""
-        async with self._batches_lock:
-            return batch_id in self._batches
-    
-    async def get_batch_tasks(self, batch_id: str) -> Dict[str, Any]:
-        """Get all tasks for a batch (thread-safe)."""
-        async with self._batches_lock:
-            if batch_id in self._batches:
-                return self._batches[batch_id].get("tasks", {}).copy()
-            return {}
     
     # WebSocket Client Management
     async def add_client(self, client_id: str, websocket: Any) -> None:

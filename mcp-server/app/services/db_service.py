@@ -2,7 +2,7 @@ import json
 from datetime import datetime
 from typing import Dict, Any, List, Optional
 from sqlmodel import Session, select
-from app.db.models import WorkSession as DBWorkSession, Conversation, Batch
+from app.db.models import WorkSession as DBWorkSession, Conversation, Batch, BatchTaskEntity
 from app.models.work_session import WorkSession, WorkSessionAgent
 from app.core.logging import get_logger
 
@@ -267,6 +267,52 @@ class DBService:
             self.session.rollback()
             logger.error("Failed to increment batch progress", error=str(e), batch_id=batch_id)
             raise
+
+    # --- Batch Task Methods ---
+
+    def create_batch_task(self, task_data: Dict[str, Any]) -> BatchTaskEntity:
+        """Create a new batch task record."""
+        try:
+            db_task = BatchTaskEntity(**task_data)
+            self.session.add(db_task)
+            self.session.commit()
+            self.session.refresh(db_task)
+            return db_task
+        except Exception as e:
+            self.session.rollback()
+            logger.error("Failed to create batch task", error=str(e), batch_id=task_data.get("batch_id"))
+            raise
+
+    def update_batch_task(self, batch_id: str, task_id: str, updates: Dict[str, Any]) -> Optional[BatchTaskEntity]:
+        """Update a batch task record."""
+        try:
+            statement = select(BatchTaskEntity).where(
+                BatchTaskEntity.batch_id == batch_id,
+                BatchTaskEntity.task_id == task_id
+            )
+            db_task = self.session.exec(statement).first()
+            if not db_task:
+                return None
+
+            for key, value in updates.items():
+                if key == "result" and isinstance(value, dict):
+                    value = json.dumps(value)
+                setattr(db_task, key, value)
+            
+            db_task.updated_at = datetime.utcnow()
+            self.session.add(db_task)
+            self.session.commit()
+            self.session.refresh(db_task)
+            return db_task
+        except Exception as e:
+            self.session.rollback()
+            logger.error("Failed to update batch task", error=str(e), batch_id=batch_id, task_id=task_id)
+            raise
+
+    def get_batch_tasks(self, batch_id: str) -> List[BatchTaskEntity]:
+        """Get all tasks for a batch."""
+        statement = select(BatchTaskEntity).where(BatchTaskEntity.batch_id == batch_id)
+        return self.session.exec(statement).all()
 
     # --- Helpers ---
 

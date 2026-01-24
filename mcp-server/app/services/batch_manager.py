@@ -1,9 +1,13 @@
 import asyncio
+from datetime import datetime
 from typing import List, Dict, Any, Optional
+from sqlmodel import Session
+from app.db.database import engine
 from app.models.requests import BatchTask
 from app.core.state import AppState
 from app.core.logging import get_logger
 from app.services.agent_runner import AgentRunner
+from app.services.db_service import DBService
 from app.services.parsers import parse_claude_events, parse_codex_events
 
 logger = get_logger(__name__)
@@ -35,32 +39,48 @@ class BatchManager:
         """
         logger.info("Starting batch execution", batch_id=batch_id, task_count=len(tasks))
         
+        # Get session_id from batch record and update status
+        with Session(engine) as session:
+            db_service = DBService(session)
+            db_batch = db_service.get_batch(batch_id)
+            if not db_batch:
+                logger.error("Batch not found for execution", batch_id=batch_id)
+                return
+            session_id = db_batch.session_id
+            db_service.update_batch(batch_id, {"status": "running"})
+            logger.info("Batch status updated to running", batch_id=batch_id, session_id=session_id)
+        
         try:
-            # Create TaskGroup for concurrent execution
-            # using new Python 3.11+ syntax 
-            # (assuming Py3.11+, if older we'd use asyncio.gather)
-            # The prompt mentions "Use `async with asyncio.TaskGroup() as tg:`"
             async with asyncio.TaskGroup() as tg:
                 for task in tasks:
-                    tg.create_task(self._execute_single_task(batch_id, task, pwd))
+                    tg.create_task(self._execute_single_task(batch_id, task, pwd, session_id))
                     
+            # After all tasks complete, update final status
+            with Session(engine) as session:
+                db_service = DBService(session)
+                db_service.update_batch(batch_id, {"status": "completed"})
+            logger.info("Batch execution completed", batch_id=batch_id)
+            
         except ExceptionGroup as e:
-            # TaskGroup raises ExceptionGroup if any task fails
-            # We log it but individual tasks handle their own errors/status updates
             logger.error(
                 "Batch execution completed with errors", 
                 batch_id=batch_id, 
                 error_count=len(e.exceptions)
             )
+            with Session(engine) as session:
+                db_service = DBService(session)
+                db_service.update_batch(batch_id, {"status": "failed"})
 
-    async def _execute_single_task(self, batch_id: str, task: BatchTask, pwd: str) -> None:
+    async def _execute_single_task(self, batch_id: str, task: BatchTask, pwd: str, session_id: str) -> None:
         """
-        Execute a single task and update state.
+        Execute a single task and update state in DB.
         """
         logger.debug("Starting task execution", batch_id=batch_id, task_id=task.id, agent=task.agent)
         
-        # 1. Update status to running
-        await self.app_state.update_batch_task(batch_id, task.id, {"status": "running"})
+        # 1. Update status to running in DB
+        with Session(engine) as session:
+            db_service = DBService(session)
+            db_service.update_batch_task(batch_id, task.id, {"status": "running"})
         
         result_payload = {
             "text": "",
@@ -89,25 +109,16 @@ class BatchManager:
             conversation_id = task.conversation_id
             
             if exit_code != 0:
-                # Handle non-zero exit: mark as failed
                 logger.warning("Task execution failed with non-zero exit code", batch_id=batch_id, task_id=task.id, exit_code=exit_code)
                 result_payload["error"] = stderr or f"Process exited with code {exit_code}"
-                await self.app_state.update_batch_task(
-                    batch_id, 
-                    task.id, 
-                    {
-                        "status": "failed", 
-                        "result": result_payload
-                    }
-                )
+                
+                with Session(engine) as session:
+                    db_service = DBService(session)
+                    db_service.update_batch_task(batch_id, task.id, {"status": "failed", "result": result_payload})
+                    db_service.increment_batch_progress(batch_id)
                 return
 
             if task.agent == "claude":
-                # Basic extraction from stdout for result text
-                # Ideally parsers should handle this extraction too to keep DRY
-                # but parsers.py functions return list of events.
-                # We replicate logic from server.py briefly or enhance parsers if we could
-                # but strictly following extraction plan:
                 try:
                     import json
                     data = json.loads(stdout)
@@ -135,51 +146,73 @@ class BatchManager:
             result_payload["text"] = final_text
             result_payload["conversation_id"] = str(conversation_id) if conversation_id else None
             
-            # 4. Update Success
-            await self.app_state.update_batch_task(
-                batch_id, 
-                task.id, 
-                {
-                    "status": "completed", 
-                    "result": result_payload
-                }
-            )
+            # 4. Handle DB updates in a single session
+            with Session(engine) as session:
+                db_service = DBService(session)
+                
+                # Handle Conversation DB record
+                if conversation_id:
+                    existing = db_service.get_conversation(str(conversation_id))
+                    if not existing:
+                        db_service.create_conversation({
+                            "conversation_id": str(conversation_id),
+                            "session_id": session_id,
+                            "batch_id": batch_id,
+                            "agent": task.agent,
+                            "status": "completed",
+                            "prompt": task.instruction,
+                            "created_at": datetime.utcnow(),
+                            "last_activity": datetime.utcnow()
+                        })
+                    else:
+                        db_service.link_conversation_to_batch(str(conversation_id), batch_id)
+                        db_service.update_conversation(str(conversation_id), {"status": "completed"})
+
+                # Update Success
+                db_service.update_batch_task(batch_id, task.id, {"status": "completed", "result": result_payload})
+                db_service.increment_batch_progress(batch_id)
+            
             logger.info("Task completed successfully", batch_id=batch_id, task_id=task.id)
 
         except Exception as e:
             # 5. Handle Failure
             logger.error("Task failed", batch_id=batch_id, task_id=task.id, error=str(e))
             result_payload["error"] = str(e)
-            await self.app_state.update_batch_task(
-                batch_id, 
-                task.id, 
-                {
-                    "status": "failed", 
-                    "result": result_payload
-                }
-            )
+            with Session(engine) as session:
+                db_service = DBService(session)
+                db_service.update_batch_task(batch_id, task.id, {"status": "failed", "result": result_payload})
+                db_service.increment_batch_progress(batch_id)
 
     async def get_batch_status(self, batch_id: str) -> Dict[str, Any]:
         """
-        Retrieve status of a batch.
+        Retrieve status of a batch from DB.
         """
-        batch = await self.app_state.get_batch(batch_id)
-        if not batch:
-            return {"error": "Batch not found"}
+        with Session(engine) as session:
+            db_service = DBService(session)
+            db_batch = db_service.get_batch(batch_id)
+            if not db_batch:
+                return {"error": "Batch not found"}
             
-        tasks = await self.app_state.get_batch_tasks(batch_id)
-        total = len(tasks)
-        completed = sum(1 for t in tasks.values() if t.get("status") in ["completed", "failed"])
-        
-        status = "pending"
-        if completed > 0: status = "running"
-        if completed == total and total > 0: status = "completed"
-        
-        progress = (completed / total * 100) if total > 0 else 0
-        
-        return {
-            "batch_id": batch_id,
-            "status": status,
-            "progress": progress,
-            "tasks": tasks
-        }
+            db_tasks = db_service.get_batch_tasks(batch_id)
+            
+            tasks_dict = {}
+            for t in db_tasks:
+                import json
+                result = None
+                if t.result:
+                    try:
+                        result = json.loads(t.result)
+                    except:
+                        result = t.result
+                
+                tasks_dict[t.task_id] = {
+                    "status": t.status,
+                    "result": result
+                }
+            
+            return {
+                "batch_id": batch_id,
+                "status": db_batch.status,
+                "progress": db_batch.progress,
+                "tasks": tasks_dict
+            }
