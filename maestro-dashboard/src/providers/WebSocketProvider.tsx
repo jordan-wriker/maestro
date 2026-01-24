@@ -6,6 +6,7 @@ export interface LogEntry {
     agent: string;
     task: string;
     final_response?: string;
+    conversation_id?: string;
     session_id?: string;
     status: string;
     events?: unknown[];
@@ -116,7 +117,8 @@ function connect() {
         try {
             const message = JSON.parse(event.data);
             if (message.type === "log_update" && message.log) {
-                const log = message.log;
+                const log = message.log as LogEntry;
+                log.conversation_id = log.conversation_id || log.session_id;
                 const existingIndex = state.logs.findIndex((l) => l.id === log.id);
                 if (existingIndex !== -1) {
                     state.logs[existingIndex] = log;
@@ -207,7 +209,10 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
                     if (Array.isArray(data)) {
                         const s = getState();
                         const merged = new Map<number, LogEntry>();
-                        (data as LogEntry[]).forEach((entry) => merged.set(entry.id, entry));
+                        (data as LogEntry[]).forEach((entry) => {
+                            entry.conversation_id = entry.conversation_id || entry.session_id;
+                            merged.set(entry.id, entry);
+                        });
                         s.logs.forEach((entry) => merged.set(entry.id, entry));
                         s.logs = Array.from(merged.values()).sort((a, b) => b.id - a.id);
                         updateState();

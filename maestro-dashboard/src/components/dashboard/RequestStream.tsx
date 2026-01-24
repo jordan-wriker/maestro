@@ -76,8 +76,8 @@ export default function RequestStream({
                   {formatTimestamp(log.timestamp)}
                 </span>
                 <span className="col-span-2 text-blue-400 truncate font-mono">
-                  {log.session_id
-                    ? `${log.session_id.slice(0, 3)}...${log.session_id.slice(-4)}`
+                  {log.conversation_id
+                    ? `${log.conversation_id.slice(0, 3)}...${log.conversation_id.slice(-4)}`
                     : "---"}
                 </span>
                 <span className={`col-span-2 ${getAgentColor(log.agent)}`}>
