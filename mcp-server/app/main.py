@@ -2,7 +2,9 @@
 Main application entry point for MCP Server.
 Initializes FastAPI app with middleware, CORS, state management, and routing.
 """
-import os
+import json
+import uuid
+from datetime import datetime
 from pathlib import Path
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
@@ -11,10 +13,14 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+from sqlmodel import Session, select
 
 from app.core.config import settings
 from app.core.logging import configure_logging, get_logger
 from app.core.state import app_state
+
+from app.db import create_db_and_tables, engine
+from app.db.models import WorkSession
 
 from app.services.agent_runner import AsyncSubprocessRunner
 from app.services.log_storage import LogStorageService
@@ -46,6 +52,55 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
     # Initialize logs directory
     logs_dir = Path(settings.logs_dir)
     logs_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Initialize Database
+    logger.info("Initializing database tables")
+    create_db_and_tables()
+    
+    # Manage active session
+    with Session(engine) as session:
+        # Get all sessions ordered by updated_at descending
+        statement = select(WorkSession).order_by(WorkSession.updated_at.desc())
+        all_sessions = session.exec(statement).all()
+        
+        if not all_sessions:
+            # Create default session
+            logger.info("No sessions found, creating default session")
+            session_id = uuid.uuid4().hex[:8]
+            current_session = WorkSession(
+                session_id=session_id,
+                title="Default Session",
+                status="active",
+                root_directory=str(Path.cwd()),
+                agents=json.dumps([
+                    {"name": "Claude", "color": "blue"},
+                    {"name": "Codex", "color": "green"}
+                ]),
+                total_tokens="0",
+                last_active=datetime.utcnow().isoformat(),
+                is_current_session=True,
+                updated_at=datetime.utcnow()
+            )
+            session.add(current_session)
+            session.commit()
+            session.refresh(current_session)
+            logger.info("Created default session", 
+                      session_id=current_session.session_id, 
+                      title=current_session.title)
+        else:
+            # Set most recent as current, clear others
+            current_session = all_sessions[0]
+            for s in all_sessions:
+                s.is_current_session = (s.session_id == current_session.session_id)
+            
+            session.add_all(all_sessions)
+            session.commit()
+            session.refresh(current_session)
+            logger.info("Selected most recently active session as current", 
+                      session_id=current_session.session_id)
+        
+        # Store in app state
+        await app_state.set_current_session_id(current_session.session_id)
     
     # Initialize Services
     agent_runner = AsyncSubprocessRunner()

@@ -1,4 +1,6 @@
-from fastapi import Request
+from fastapi import Request, Depends
+from sqlmodel import Session
+from app.db.database import get_session
 from app.services.agent_runner import AgentRunner
 from app.services.log_storage import LogStorageService
 from app.services.websocket_manager import WebSocketManager
@@ -18,3 +20,7 @@ def get_batch_manager(request: Request) -> BatchManager:
 
 def get_app_state(request: Request):
     return request.app.state.app_state
+
+def get_db(session: Session = Depends(get_session)):
+    """Dependency to get a database session."""
+    yield session

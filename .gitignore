@@ -42,5 +42,8 @@ logs/codex/*
 .DS_Store
 Thumbs.db
 
-#AI
+# AI
 CLAUDE.md
+
+# Database
+*.db

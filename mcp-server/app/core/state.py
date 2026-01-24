@@ -27,6 +27,10 @@ class AppState:
         # WebSocket client connections (client_id -> WebSocket)
         self._connected_clients: Dict[str, Any] = {}
         self._clients_lock = asyncio.Lock()
+
+        # Session tracking
+        self._current_session_id: Optional[str] = None
+        self._session_lock = asyncio.Lock()
     
     # Call History Management
     async def add_call_history(self, entry: Dict[str, Any]) -> None:
@@ -110,6 +114,17 @@ class AppState:
         """Get the number of connected clients (thread-safe)."""
         async with self._clients_lock:
             return len(self._connected_clients)
+
+    # Session Management
+    async def get_current_session_id(self) -> Optional[str]:
+        """Get the current active session ID (thread-safe)."""
+        async with self._session_lock:
+            return self._current_session_id
+
+    async def set_current_session_id(self, session_id: str) -> None:
+        """Set the current active session ID (thread-safe)."""
+        async with self._session_lock:
+            self._current_session_id = session_id
 
 
 # Global application state instance
