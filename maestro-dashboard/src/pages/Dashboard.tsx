@@ -4,15 +4,17 @@ import RequestStream from "@/components/dashboard/RequestStream";
 import CompactStatsCards from "@/components/dashboard/CompactStatsCards";
 
 export default function OverviewPage() {
-  const { logs, isConnected, connectionError } = useWebSocket();
+  const { logs, isConnected, connectionError, currentSession } = useWebSocket();
   return (
     <div className="flex flex-col h-screen p-4 gap-4 overflow-hidden">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 shrink-0">
         <div>
-          <h1 className="text-3xl font-bold text-white mb-1">Server Status</h1>
+          <h1 className="text-3xl font-bold text-white mb-1">
+            {currentSession ? currentSession.title : "Server Status"}
+          </h1>
           <p className="text-gray-400">
-            Real-time monitoring of AI context bridges.
+            {currentSession ? `Monitoring workspace for ${currentSession.agents.map(a => a.name).join(" & ")}` : "Real-time monitoring of AI context bridges."}
           </p>
         </div>
         <div className="flex items-center gap-4 bg-[#0f0f12] px-4 py-2 rounded-xl border border-white/10 shadow-sm">

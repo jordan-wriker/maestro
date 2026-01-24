@@ -41,7 +41,7 @@ export default function LogsPage() {
   const [showTools, setShowTools] = useState(true);
 
   // WebSocket for real-time updates
-  const { logs: liveLogs } = useWebSocket();
+  const { logs: liveLogs, currentSession } = useWebSocket();
 
   // Process incoming WebSocket logs
   useEffect(() => {
@@ -170,8 +170,13 @@ export default function LogsPage() {
   // Fetch conversations list
   useEffect(() => {
     async function fetchConversations() {
+      if (!currentSession) {
+        setConversations([]);
+        return;
+      }
+      setLoading(true);
       try {
-        const res = await fetch(`/api/conversations?agent=${filter}`);
+        const res = await fetch(`/api/conversations?agent=${filter}&session_id=${currentSession.session_id}`);
         const data = await res.json();
         setConversations(data);
         setLoading(false);
@@ -181,7 +186,7 @@ export default function LogsPage() {
       }
     }
     fetchConversations();
-  }, [filter]);
+  }, [filter, currentSession]);
 
   // Fetch conversation detail when selected
   async function selectConversation(conversation: ConversationSummary) {
@@ -192,10 +197,13 @@ export default function LogsPage() {
     // setSelectedConversation(null); 
 
     try {
+      if (!currentSession) return;
       // Use the agent-specific route if available, otherwise fallback to generic
-      const url = conversation.agent
+      const baseUrl = conversation.agent
         ? `/api/conversations/${conversation.agent}/${conversation.conversation_id}`
         : `/api/conversations/${conversation.conversation_id}`;
+
+      const url = `${baseUrl}?session_id=${currentSession.session_id}`;
 
       const res = await fetch(url);
 

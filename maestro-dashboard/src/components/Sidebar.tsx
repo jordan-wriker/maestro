@@ -1,5 +1,6 @@
 import { Link, useLocation } from "react-router-dom";
 import { useState } from "react";
+import { useWebSocket } from "@/hooks/useWebSocket";
 
 const navItems = [
   { href: "/", label: "Overview", icon: "dashboard" },
@@ -18,18 +19,17 @@ export default function Sidebar() {
   const location = useLocation();
   const pathname = location.pathname;
   const [collapsed, setCollapsed] = useState(false);
+  const { currentSession } = useWebSocket();
 
   return (
     <aside
-      className={`${
-        collapsed ? "w-20" : "w-64"
-      } flex-shrink-0 border-r border-white/5 bg-[#0a0a0c] flex flex-col z-10 transition-all duration-300`}
+      className={`${collapsed ? "w-20" : "w-64"
+        } flex-shrink-0 border-r border-white/5 bg-[#0a0a0c] flex flex-col z-10 transition-all duration-300`}
     >
       {/* Header */}
       <div
-        className={`h-16 flex items-center ${
-          collapsed ? "justify-center" : "justify-between"
-        } px-4 border-b border-white/5`}
+        className={`h-16 flex items-center ${collapsed ? "justify-center" : "justify-between"
+          } px-4 border-b border-white/5`}
       >
         <button
           onClick={() => collapsed && setCollapsed(false)}
@@ -56,6 +56,22 @@ export default function Sidebar() {
 
       {/* Navigation */}
       <nav className="flex-1 px-3 py-6 flex flex-col gap-1 overflow-y-auto overflow-x-hidden">
+        {/* Current Session Indicator */}
+        {!collapsed && currentSession && (
+          <div className="px-3 mb-6">
+            <div className="bg-primary/5 border border-primary/10 rounded-xl p-3">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.5)]"></span>
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest leading-none">Live Session</span>
+              </div>
+              <p className="text-sm font-bold text-white truncate mb-1">{currentSession.title}</p>
+              <Link to="/sessions" className="text-[10px] text-primary hover:text-primary-hover font-bold uppercase tracking-wider transition-colors">
+                Change Workspace
+              </Link>
+            </div>
+          </div>
+        )}
+
         {!collapsed && (
           <div className="px-3 mb-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">
             Dashboard
@@ -68,18 +84,15 @@ export default function Sidebar() {
             <Link
               key={item.href}
               to={item.href}
-              className={`flex items-center ${
-                collapsed ? "justify-center px-0" : "px-3"
-              } py-2.5 rounded-lg group transition-all ${
-                isActive
+              className={`flex items-center ${collapsed ? "justify-center px-0" : "px-3"
+                } py-2.5 rounded-lg group transition-all ${isActive
                   ? "bg-primary/10 text-primary"
                   : "text-gray-400 hover:text-white hover:bg-white/5"
-              }`}
+                }`}
             >
               <span
-                className={`material-icons-round text-xl ${
-                  collapsed ? "" : "mr-3"
-                }`}
+                className={`material-icons-round text-xl ${collapsed ? "" : "mr-3"
+                  }`}
               >
                 {item.icon}
               </span>
@@ -104,14 +117,12 @@ export default function Sidebar() {
           <Link
             key={item.label}
             to={item.href}
-            className={`flex items-center ${
-              collapsed ? "justify-center px-0" : "px-3"
-            } py-2.5 text-gray-400 hover:text-white hover:bg-white/5 rounded-lg group transition-all`}
+            className={`flex items-center ${collapsed ? "justify-center px-0" : "px-3"
+              } py-2.5 text-gray-400 hover:text-white hover:bg-white/5 rounded-lg group transition-all`}
           >
             <span
-              className={`material-icons-round text-xl ${
-                collapsed ? "" : "mr-3"
-              }`}
+              className={`material-icons-round text-xl ${collapsed ? "" : "mr-3"
+                }`}
             >
               {item.icon}
             </span>

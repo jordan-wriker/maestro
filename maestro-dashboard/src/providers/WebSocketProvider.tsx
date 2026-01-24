@@ -1,4 +1,5 @@
 import React, { createContext, useEffect, useState } from "react";
+import { WorkSession } from "../types/api";
 
 export interface LogEntry {
     id: number;
@@ -15,12 +16,18 @@ interface WebSocketContextType {
     logs: LogEntry[];
     isConnected: boolean;
     connectionError: string | null;
+    currentSession: WorkSession | null;
+    setCurrentSession: (session: WorkSession) => void;
+    refreshSessions: () => Promise<void>;
 }
 
 export const WebSocketContext = createContext<WebSocketContextType>({
     logs: [],
     isConnected: false,
     connectionError: null,
+    currentSession: null,
+    setCurrentSession: () => { },
+    refreshSessions: async () => { },
 });
 
 // --- Singleton WebSocket State (stored on window to survive HMR) ---
@@ -30,6 +37,7 @@ interface WebSocketState {
     logs: LogEntry[];
     isConnected: boolean;
     connectionError: string | null;
+    currentSession: WorkSession | null;
     subscribers: Set<() => void>;
     url: string;
     reconnectTimer: ReturnType<typeof setTimeout> | null;
@@ -60,6 +68,7 @@ function getState(): WebSocketState {
             logs: [],
             isConnected: false,
             connectionError: null,
+            currentSession: null,
             subscribers: new Set(),
             url: getWebSocketUrl(),
             reconnectTimer: null,
@@ -175,47 +184,89 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
     const [state, setState] = useState({
         logs: wsState.logs,
         isConnected: wsState.isConnected,
-        connectionError: wsState.connectionError
+        connectionError: wsState.connectionError,
+        currentSession: wsState.currentSession
     });
+
+    const refreshSessions = async () => {
+        try {
+            const response = await fetch("/api/sessions/current");
+            if (response.ok) {
+                const session = await response.json();
+                setCurrentSession(session);
+            } else {
+                const listRes = await fetch("/api/sessions");
+                const data = await listRes.json();
+                if (data.sessions && data.sessions.length > 0) {
+                    // Activate the first session found as fallback
+                    const fallbackSession = data.sessions[0];
+                    const activateRes = await fetch(`/api/sessions/${fallbackSession.session_id}/activate`, {
+                        method: 'PUT'
+                    });
+                    if (activateRes.ok) {
+                        const activatedSession = await activateRes.json();
+                        setCurrentSession(activatedSession);
+                    } else {
+                        setCurrentSession(fallbackSession);
+                    }
+                }
+            }
+        } catch (error) {
+            console.error("Failed to refresh sessions:", error);
+        }
+    };
+
+    const setCurrentSession = (session: WorkSession) => {
+        const wsState = getState();
+        const sessionChanged = wsState.currentSession?.session_id !== session.session_id;
+
+        wsState.currentSession = session;
+
+        if (sessionChanged) {
+            wsState.logs = [];
+            fetch(`/api/logs?session_id=${session.session_id}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (Array.isArray(data)) {
+                        wsState.logs = data as LogEntry[];
+                        notifySubscribers();
+                    }
+                })
+                .catch(err => console.error("Failed to fetch logs for session:", err));
+        }
+
+        notifySubscribers();
+    };
 
     useEffect(() => {
         const wsState = getState();
 
-        // Subscribe to singleton updates
         const updateState = () => {
             const s = getState();
             setState({
                 logs: [...s.logs],
                 isConnected: s.isConnected,
-                connectionError: s.connectionError
+                connectionError: s.connectionError,
+                currentSession: s.currentSession
             });
         };
         wsState.subscribers.add(updateState);
 
-        // Connect immediately (Vite is client-side only)
         ensureConnection();
-
-        // Sync initial state (connection may already be established)
         updateState();
 
-        // Fetch historical logs from DB if we don't have any yet
-        if (wsState.logs.length === 0) {
-            // API is proxied in development, same origin in production
-            fetch("/api/logs")
+        if (wsState.logs.length === 0 && !wsState.currentSession) {
+            refreshSessions();
+        } else if (wsState.logs.length === 0 && wsState.currentSession) {
+            fetch(`/api/logs?session_id=${wsState.currentSession.session_id}`)
                 .then(res => res.json())
                 .then(data => {
                     if (Array.isArray(data)) {
-                        const s = getState();
-                        const merged = new Map<number, LogEntry>();
-                        (data as LogEntry[]).forEach((entry) => {
-                            merged.set(entry.id, entry);
-                        });
-                        s.logs.forEach((entry) => merged.set(entry.id, entry));
-                        s.logs = Array.from(merged.values()).sort((a, b) => b.id - a.id);
-                        updateState();
+                        wsState.logs = data as LogEntry[];
+                        notifySubscribers();
                     }
                 })
-                .catch(err => console.error("[WebSocketProvider] Fetch logs failed:", err));
+                .catch(err => console.error("[WebSocketProvider] Fetch session logs failed:", err));
         }
 
         return () => {
@@ -224,7 +275,11 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
     }, []);
 
     return (
-        <WebSocketContext.Provider value={state}>
+        <WebSocketContext.Provider value={{
+            ...state,
+            setCurrentSession,
+            refreshSessions
+        }}>
             {children}
         </WebSocketContext.Provider>
     );

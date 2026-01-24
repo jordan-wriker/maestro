@@ -1,4 +1,5 @@
 from typing import Any, Dict, List, Optional
+from datetime import datetime
 from pydantic import BaseModel, Field
 from app.models.work_session import WorkSession
 
@@ -15,6 +16,16 @@ class BatchStatusResponse(BaseModel):
     batch_id: str
     status: str
     new_results: List[Dict[str, Any]]
+
+class BatchResponse(BaseModel):
+    batch_id: str
+    session_id: str
+    status: str
+    total_tasks: int
+    completed_tasks: int
+    progress: float
+    created_at: datetime
+    updated_at: datetime
 
 class LogEntry(BaseModel):
     id: int

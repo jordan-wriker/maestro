@@ -1,9 +1,10 @@
 import uuid
 import asyncio
-from fastapi import APIRouter, Depends, HTTPException
+from typing import List, Optional
+from fastapi import APIRouter, Depends, HTTPException, Query
 from app.api.deps import get_batch_manager, get_app_state, get_db_service
 from app.models.requests import BatchSubmitRequest, BatchStatusRequest
-from app.models.responses import BatchSubmitResponse, BatchStatusResponse
+from app.models.responses import BatchSubmitResponse, BatchStatusResponse, BatchResponse
 from app.services.batch_manager import BatchManager
 from app.services.db_service import DBService
 from app.core.state import AppState
@@ -99,3 +100,19 @@ async def get_batch_status(
         status=db_batch.status,
         new_results=new_results
     )
+
+@router.get("/api/batches", response_model=List[BatchResponse])
+async def list_batches(
+    session_id: Optional[str] = Query(None),
+    app_state: AppState = Depends(get_app_state),
+    db_service: DBService = Depends(get_db_service)
+):
+    """List all batches for the current or specified session."""
+    if not session_id:
+        session_id = await app_state.get_current_session_id()
+    
+    if not session_id:
+        raise HTTPException(status_code=403, detail="No active session found")
+        
+    batches = db_service.list_batches_by_session(session_id)
+    return batches
