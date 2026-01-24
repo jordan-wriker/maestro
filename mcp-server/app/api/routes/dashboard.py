@@ -1,9 +1,10 @@
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Query
-from app.api.deps import get_log_storage, get_app_state
+from app.api.deps import get_log_storage, get_app_state, get_db_service
 from app.models.responses import LogEntry, ConversationSummary, ConversationDetail
 from app.services.log_storage import LogStorageService
+from app.services.db_service import DBService
 from app.core.state import AppState
 
 router = APIRouter()
@@ -33,9 +34,12 @@ async def get_stats(app_state: AppState = Depends(get_app_state)):
 @router.get("/api/conversations", response_model=List[ConversationSummary])
 async def list_conversations(
     agent: str = Query("all", description="Filter by agent"),
-    log_storage: LogStorageService = Depends(get_log_storage)
+    log_storage: LogStorageService = Depends(get_log_storage),
+    app_state: AppState = Depends(get_app_state),
+    db_service: DBService = Depends(get_db_service)
 ):
-    conversations = await log_storage.list_conversations(agent)
+    session_id = await app_state.get_current_session_id()
+    conversations = await log_storage.list_conversations(agent, session_id=session_id, db_service=db_service)
     return conversations
 
 async def _get_conversation_detail(conversation_id: str, log_storage: LogStorageService, agent: Optional[str] = None) -> ConversationDetail:

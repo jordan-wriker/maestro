@@ -11,16 +11,7 @@ from app.core.state import AppState
 from app.core.logging import get_logger
 from app.services.parsers import parse_claude_events, parse_codex_events
 
-# Try importing from db_logger at root. Assumes pythonpath allows it.
-# If running as 'python server.py' or 'uvicorn app.main:app' from mcp-server dir, this works if mcp-server is current dir.
-try:
-    from db_logger import log_request_to_db
-except ImportError:
-    # Fallback or mock if running in isolation/testing where path isn't set
-    # But for production code we expect it to work.
-    import sys
-    sys.path.append(str(Path(__file__).resolve().parents[2])) # Add mcp-server to path
-    from db_logger import log_request_to_db
+from app.services.db_service import DBService
 
 logger = get_logger(__name__)
 
@@ -90,16 +81,71 @@ class LogStorageService:
              # I will stick to catching the requested ones.
              raise
 
-    async def log_to_database(self, agent: str, prompt: str, status: str, duration: int, conversation_id: str) -> None:
+    async def log_to_database(self, agent: str, prompt: str, status: str, duration: int, conversation_id: str, session_id: str, db_service: DBService) -> None:
         """
-        Log request to database asynchronously.
+        Log request to database using DBService. Supports upsert for resumed conversations.
         """
         try:
-            await asyncio.to_thread(log_request_to_db, agent, prompt, status, duration, conversation_id)
-            logger.debug("Logged to database", agent=agent, conversation_id=conversation_id, status=status)
+            # Map status strings to database values
+            # "Completed" -> "completed", "Failed" -> "error", "Running..." -> "running"
+            db_status = status.lower()
+            if "running" in db_status:
+                db_status = "running"
+            elif "failed" in db_status or "error" in db_status:
+                db_status = "error"
+            elif "completed" in db_status:
+                db_status = "completed"
+
+            # Check if conversation exists (for resumed conversations)
+            existing_conv = db_service.get_conversation(conversation_id)
+            
+            if existing_conv:
+                # Update existing conversation to link to current session and refresh metadata
+                db_service.update_conversation(conversation_id, {
+                    "session_id": session_id,
+                    "agent": agent,
+                    "prompt": prompt,
+                    "status": db_status,
+                    "last_activity": datetime.utcnow()
+                })
+                logger.debug("Updated resumed conversation in database", agent=agent, conversation_id=conversation_id, session_id=session_id)
+            else:
+                # Create new record
+                db_service.create_conversation({
+                    "conversation_id": conversation_id,
+                    "session_id": session_id,
+                    "agent": agent,
+                    "status": db_status,
+                    "prompt": prompt,
+                    "response": None,
+                    "created_at": datetime.utcnow(),
+                    "last_activity": datetime.utcnow()
+                })
+                logger.debug("Created new conversation in database", agent=agent, conversation_id=conversation_id, session_id=session_id)
         except Exception as e:
             # We explicitly don't fail the request if DB logging fails
-            logger.warning("Database logging failed", agent=agent, error=str(e))
+            logger.warning("Database logging failed via DBService", agent=agent, conversation_id=conversation_id, error=str(e))
+
+    async def update_conversation_response(self, conversation_id: str, response_text: str, status: str, db_service: DBService) -> None:
+        """
+        Update conversation record with final response and status.
+        """
+        try:
+            # Map status strings
+            db_status = status.lower()
+            if "failed" in db_status or "error" in db_status:
+                db_status = "error"
+            elif "completed" in db_status:
+                db_status = "completed"
+            
+            db_service.update_conversation(conversation_id, {
+                "response": response_text,
+                "status": db_status,
+                "last_activity": datetime.utcnow()
+            })
+            logger.debug("Updated conversation response in database", conversation_id=conversation_id, status=db_status)
+        except Exception as e:
+            logger.warning("Failed to update conversation response in database", conversation_id=conversation_id, error=str(e))
 
     async def load_logs_from_files(self) -> List[Dict[str, Any]]:
         """
@@ -192,10 +238,34 @@ class LogStorageService:
             logger.error("Error reading conversation log", conversation_id=conversation_id, error=str(e))
             return None
             
-    async def list_conversations(self, agent: str = "all") -> List[Dict[str, Any]]:
+    async def list_conversations(self, agent: str = "all", session_id: Optional[str] = None, db_service: Optional[DBService] = None) -> List[Dict[str, Any]]:
         """
-        List all conversations, optionally filtered by agent.
+        List all conversations, optionally filtered by agent or session.
+        If db_service and session_id are provided, it uses the database.
         """
+        if db_service and session_id:
+            try:
+                db_conversations = db_service.list_conversations_by_session(session_id)
+                results = []
+                for conv in db_conversations:
+                    # Filter by agent if requested
+                    if agent != "all" and conv.agent != agent:
+                        continue
+                        
+                    results.append({
+                        "conversation_id": conv.conversation_id,
+                        "agent": conv.agent,
+                        "created_at": conv.created_at.isoformat() if conv.created_at else "",
+                        "status": conv.status,
+                        "prompt": conv.prompt or "",
+                        "response": conv.response or "",
+                        "last_activity": conv.last_activity.isoformat() if conv.last_activity else "",
+                    })
+                return results
+            except Exception as e:
+                logger.warning(f"Failed to query conversations from database for session {session_id}: {e}")
+                # Fall back to file-based listing
+        
         conversations = []
         agents_to_check = ["claude", "codex"] if agent == "all" else [agent]
         

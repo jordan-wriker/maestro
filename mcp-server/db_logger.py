@@ -1,3 +1,4 @@
+# DEPRECATED: This module is replaced by app.services.db_service. Will be removed in future version.
 """
 Database logger module for logging agent requests to SQLite.
 
