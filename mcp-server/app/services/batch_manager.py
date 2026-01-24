@@ -116,12 +116,29 @@ class BatchManager:
             
             stdout, stderr, exit_code = await self.agent_runner.run_agent(task.agent, args, pwd)
             
+            logger.debug(
+                "Agent execution completed",
+                batch_id=batch_id,
+                task_id=task.id,
+                agent=task.agent,
+                exit_code=exit_code,
+                stdout_len=len(stdout) if stdout else 0,
+                stderr_len=len(stderr) if stderr else 0
+            )
+            
             # 3. Parse Output
             # 3. Parse Output using standardized parsers
             if task.agent == "claude":
                 parsed_events, detected_conv_id = parse_claude_events(stdout, task.instruction)
                 if detected_conv_id:
                     conversation_id = detected_conv_id
+                    logger.debug(
+                        "Conversation ID extracted from Claude output",
+                        batch_id=batch_id,
+                        task_id=task.id,
+                        agent=task.agent,
+                        conversation_id=conversation_id
+                    )
                 
                 # Extract final text from the last result or response event
                 final_text = ""
@@ -136,6 +153,13 @@ class BatchManager:
                 parsed_events, detected_conv_id = parse_codex_events(stdout, task.instruction)
                 if detected_conv_id:
                     conversation_id = detected_conv_id
+                    logger.debug(
+                        "Conversation ID extracted from Codex output",
+                        batch_id=batch_id,
+                        task_id=task.id,
+                        agent=task.agent,
+                        conversation_id=conversation_id
+                    )
                 
                 # Extract final text
                 final_text = ""
@@ -146,11 +170,31 @@ class BatchManager:
                 if not final_text and not parsed_events:
                      final_text = stdout # Fallback
 
+            logger.debug(
+                "Output parsing completed",
+                batch_id=batch_id,
+                task_id=task.id,
+                agent=task.agent,
+                event_count=len(parsed_events),
+                has_final_text=bool(final_text),
+                final_text_len=len(final_text) if final_text else 0
+            )
+
             # Check logic for failure / determine status
             task_status = "completed" if exit_code == 0 else "failed"
 
             if exit_code != 0:
-                logger.warning("Task execution finished with non-zero exit code", batch_id=batch_id, task_id=task.id, exit_code=exit_code)
+                logger.warning(
+                    "Task finished with non-zero exit code - Task will continue processing despite non-zero exit code",
+                    batch_id=batch_id,
+                    task_id=task.id,
+                    agent=task.agent,
+                    exit_code=exit_code,
+                    has_stdout=bool(stdout),
+                    has_stderr=bool(stderr),
+                    event_count=len(parsed_events),
+                    has_final_text=bool(final_text)
+                )
                 # Improve Error Reporting:
                 # If stderr is empty but stdout has content, likely the error is in stdout (especially for JSON output)
                 error_msg = stderr
@@ -168,6 +212,14 @@ class BatchManager:
             # Generate UUID if missing but we have content to link results properly
             if not conversation_id and (final_text or parsed_events):
                 conversation_id = str(uuid.uuid4())
+                logger.debug(
+                    "Generated new conversation ID for task results",
+                    batch_id=batch_id,
+                    task_id=task.id,
+                    agent=task.agent,
+                    conversation_id=conversation_id,
+                    reason="Has content but no ID extracted"
+                )
 
             # If success or partial success, proceed with processing
             result_payload["text"] = final_text
@@ -178,11 +230,33 @@ class BatchManager:
                 db_service = DBService(session)
                 
                 # Handle Conversation DB record (Conditional on having ID and some content)
-                if conversation_id and (final_text or parsed_events):
+                has_conv_id = bool(conversation_id)
+                has_content_db = bool(final_text or parsed_events)
+                will_create_or_update = has_conv_id and has_content_db
+                
+                logger.debug(
+                    "Evaluating conversation record creation/update",
+                    batch_id=batch_id,
+                    task_id=task.id,
+                    agent=task.agent,
+                    has_conversation_id=has_conv_id,
+                    has_content=has_content_db,
+                    will_create_or_update=will_create_or_update
+                )
+
+                if will_create_or_update:
                     existing = db_service.get_conversation(str(conversation_id))
                     conv_status = "completed" if exit_code == 0 else "failed"
 
                     if not existing:
+                        logger.debug(
+                            "Creating new conversation record",
+                            batch_id=batch_id,
+                            task_id=task.id,
+                            agent=task.agent,
+                            conversation_id=str(conversation_id),
+                            status=conv_status
+                        )
                         db_service.create_conversation({
                             "conversation_id": str(conversation_id),
                             "session_id": session_id,
@@ -195,25 +269,64 @@ class BatchManager:
                             "last_activity": datetime.utcnow()
                         })
                     else:
+                        logger.debug(
+                            "Updating existing conversation record",
+                            batch_id=batch_id,
+                            task_id=task.id,
+                            agent=task.agent,
+                            conversation_id=str(conversation_id),
+                            status=conv_status
+                        )
                         db_service.link_conversation_to_batch(str(conversation_id), batch_id)
                         db_service.update_conversation(str(conversation_id), {
                             "status": conv_status,
                             "response": final_text,
                             "last_activity": datetime.utcnow()
                         })
+                else:
+                    logger.debug(
+                        "Skipping conversation record (no ID or no content)",
+                        batch_id=batch_id,
+                        task_id=task.id,
+                        agent=task.agent,
+                        has_conversation_id=has_conv_id,
+                        has_final_text=bool(final_text),
+                        has_parsed_events=bool(parsed_events)
+                    )
 
                 # Update Task Status
                 db_service.update_batch_task(batch_id, task.id, {"status": task_status, "result": result_payload})
                 db_service.increment_batch_progress(batch_id)
 
             # 5. Save Log to File (Conditional on having content)
-            if final_text or parsed_events:
+            has_content_log = bool(final_text or parsed_events)
+            logger.debug(
+                "Evaluating log file creation",
+                batch_id=batch_id,
+                task_id=task.id,
+                agent=task.agent,
+                has_final_text=bool(final_text),
+                has_parsed_events=bool(parsed_events),
+                will_save_log=has_content_log
+            )
+
+            if has_content_log:
                 # We need to construct a log entry similar to what agent.py does
                 duration_ms = int((datetime.now() - start_time).total_seconds() * 1000)
                 
                 # If we don't have a conversation ID yet, generate one for the log filename
                 log_conversation_id = conversation_id or str(uuid.uuid4())
                 is_new = not bool(task.conversation_id) # roughly speaking
+
+                logger.debug(
+                    "Saving log file for task",
+                    batch_id=batch_id,
+                    task_id=task.id,
+                    agent=task.agent,
+                    conversation_id=str(log_conversation_id),
+                    is_new=is_new,
+                    duration_ms=duration_ms
+                )
 
                 log_entry = {
                     "id": int(datetime.now().timestamp() * 1000),
@@ -247,14 +360,32 @@ class BatchManager:
                         session_id, 
                         db_service
                     )
+            else:
+                logger.debug(
+                    "Skipping log file creation (no content)",
+                    batch_id=batch_id,
+                    task_id=task.id,
+                    agent=task.agent,
+                    has_final_text=bool(final_text),
+                    has_parsed_events=bool(parsed_events)
+                )
             
             log_method = logger.info if exit_code == 0 else logger.warning
-            log_method(f"Task finished with status: {task_status}", batch_id=batch_id, task_id=task.id)
+            log_method(
+                f"Task finished with status: {task_status}",
+                batch_id=batch_id,
+                task_id=task.id,
+                agent=task.agent,
+                exit_code=exit_code,
+                results_saved=bool(final_text or parsed_events),
+                conversation_saved=will_create_or_update,
+                log_file_saved=has_content_log
+            )
 
         except Exception as e:
             # 6. Handle Catastrophic Failure (Crash in runner or parser)
             # 5. Handle Failure
-            logger.error("Task failed", batch_id=batch_id, task_id=task.id, error=str(e))
+            logger.error("Task failed", batch_id=batch_id, task_id=task.id, agent=task.agent, error=str(e))
             result_payload["error"] = str(e)
             with Session(engine) as session:
                 db_service = DBService(session)
