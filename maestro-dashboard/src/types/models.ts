@@ -1,38 +1,9 @@
+import type { SessionEvent } from './api';
 
-export interface LogEntry {
-    id: number;
-    timestamp: string;
-    agent: string;
-    task: string;
-    final_response?: string;
-    conversation_id?: string;
-    status: string;
-    events?: unknown[];
-}
+export type { SessionEvent };
 
-export interface SessionEvent {
-    type: "prompt" | "system" | "response" | "tool_call" | "result" | "thinking" | "reasoning";
-    content: string;
-    tool?: string;
-    output?: string;
-    timestamp?: string;
-}
+// LogEntry is now defined in api.ts
 
-export interface ConversationSummary {
-    conversation_id: string;
-    agent: "claude" | "codex";
-    created_at: string;
-    status: "completed" | "error" | "active";
-    task: string;
-    final_response: string;
-    last_activity?: string;
-}
+import type { ConversationSummary, ConversationDetail } from './api';
 
-export interface ConversationDetail {
-    conversation_id: string;
-    agent: "claude" | "codex";
-    created_at: string;
-    events: SessionEvent[];
-    status: "completed" | "error" | "active";
-    task: string;
-}
+export type { ConversationSummary, ConversationDetail };

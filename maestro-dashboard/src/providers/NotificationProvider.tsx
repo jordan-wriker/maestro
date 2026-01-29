@@ -31,9 +31,21 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     // Listen for global API errors
     useEffect(() => {
         const handleApiError = (error: APIError) => {
-            // Prevent duplicate error toasts if possible, but for now just show them
-            // We could filter 404s if we didn't want to alert on those, but typically we do so user knows
-            showNotification('error', error.detail || 'An unexpected error occurred');
+            let message = 'An unexpected error occurred';
+
+            if (typeof error.detail === 'string') {
+                message = error.detail;
+            } else if (error.detail && typeof error.detail === 'object') {
+                // Determine how to format object errors
+                // For now, JSON stringify or just take the first error if it's a map
+                try {
+                    message = JSON.stringify(error.detail);
+                } catch {
+                    message = 'An error occurred (details invalid)';
+                }
+            }
+
+            showNotification('error', message);
         };
 
         const unsubscribe = apiState.subscribeError(handleApiError);

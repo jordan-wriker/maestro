@@ -181,9 +181,9 @@ export default function LogsPage() {
 
       const data = await api.conversations.get(conversation.conversation_id, currentSession.session_id);
       setSelectedConversation(data);
-    } catch (error: any) {
+    } catch (error: unknown) {
       // Check for 404 status in the error object (normalized by client)
-      if (error && error.status === 404) {
+      if (error && (error as any).status === 404) {
         console.warn(`Conversation ${conversation.conversation_id} not found (404).`);
         setSelectedConversation({
           conversation_id: conversation.conversation_id,

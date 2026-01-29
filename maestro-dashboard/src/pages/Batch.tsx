@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import type { Batch as APIBatch } from "../types/api";
-import type { LogEntry } from "../types/models";
+import type { LogEntry } from "../types/api";
 import { api } from "../api/endpoints";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { StatsCard } from "@/components/ui/StatsCard";

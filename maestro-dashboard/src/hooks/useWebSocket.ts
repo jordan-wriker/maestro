@@ -1,6 +1,6 @@
 import { useContext } from "react";
 import { WebSocketContext } from "@/providers/WebSocketProvider";
-import type { LogEntry } from "../types/models";
+import type { LogEntry } from "../types/api";
 
 // Re-export LogEntry type for compatibility
 export type { LogEntry };

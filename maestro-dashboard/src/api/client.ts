@@ -1,5 +1,6 @@
 
 
+import { z } from 'zod';
 import type { APIError } from '../types/api';
 
 const DEFAULT_TIMEOUT = 30000; // 30 seconds
@@ -213,6 +214,37 @@ export class ApiClient {
 
     public delete<T>(endpoint: string, init?: RequestInit): Promise<T> {
         return this.request<T>(endpoint, { ...init, method: 'DELETE' });
+    }
+
+    // Validated methods
+    public async getValidated<T>(endpoint: string, schema: z.ZodSchema<T>, params?: RequestConfig['params'], init?: RequestInit): Promise<T> {
+        const raw = await this.get<unknown>(endpoint, params, init);
+        return this.validate(raw, schema);
+    }
+
+    public async postValidated<T>(endpoint: string, schema: z.ZodSchema<T>, body?: any, init?: RequestInit): Promise<T> {
+        const raw = await this.post<unknown>(endpoint, body, init);
+        return this.validate(raw, schema);
+    }
+
+    public async putValidated<T>(endpoint: string, schema: z.ZodSchema<T>, body?: any, init?: RequestInit): Promise<T> {
+        const raw = await this.put<unknown>(endpoint, body, init);
+        return this.validate(raw, schema);
+    }
+
+    private validate<T>(data: unknown, schema: z.ZodSchema<T>): T {
+        const result = schema.safeParse(data);
+        if (result.success) {
+            return result.data;
+        }
+
+        const detail = result.error.issues.map((e: z.ZodIssue) => `${e.path.join('.')}: ${e.message}`).join(', ');
+        const error: APIError = {
+            detail: `Validation Error: ${detail}`,
+            status: 422, // Unprocessable Entity
+        };
+        apiState.notifyError(error);
+        throw error;
     }
 }
 

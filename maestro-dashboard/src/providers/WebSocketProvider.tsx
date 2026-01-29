@@ -1,6 +1,8 @@
 import React, { createContext, useEffect, useMemo } from "react";
 import type { WorkSession } from "../types/api";
-import type { LogEntry } from "../types/models";
+import type { LogEntry } from "../types/api";
+import { LogEntrySchema } from "../schemas/api";
+import { z } from "zod";
 import { useSocketConnection } from "../hooks/useSocketConnection";
 import { useSessionState } from "../hooks/useSessionState";
 
@@ -44,9 +46,24 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
 
         const handleMessage = (event: MessageEvent) => {
             try {
-                const message = JSON.parse(event.data);
-                if (message.type === "log_update" && message.log) {
-                    addLog(message.log as LogEntry);
+                const rawMessage = JSON.parse(event.data);
+
+                // Simple validation for the message structure
+                // We can expand this schema as needed
+                const MessageSchema = z.object({
+                    type: z.literal("log_update"),
+                    log: LogEntrySchema
+                });
+
+                const result = MessageSchema.safeParse(rawMessage);
+
+                if (result.success) {
+                    const message = result.data;
+                    if (message.type === "log_update") {
+                        addLog(message.log);
+                    }
+                } else {
+                    console.warn("[WebSocket] Received invalid message format:", result.error);
                 }
             } catch (err) {
                 console.error("[WebSocket] Failed to parse message:", err);

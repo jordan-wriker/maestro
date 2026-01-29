@@ -1,60 +1,61 @@
-
 import { apiClient } from './client';
 import { MOCK_TOOLS } from '@/config/constants';
-import type {
-    WorkSession,
-    SessionResponse,
-    CreateSessionRequest,
-    BatchResponse,
-    StatsResponse,
-    LogsResponse,
-} from '../types/api';
-import type { ConversationSummary, ConversationDetail } from '../types/models';
+import { z } from 'zod';
+import type { CreateSessionRequest } from '../types/api';
+import {
+    SessionResponseSchema,
+    WorkSessionSchema,
+    BatchResponseSchema,
+    StatsResponseSchema,
+    LogsResponseSchema,
+    ConversationSummarySchema,
+    ConversationDetailSchema,
+} from '../schemas/api';
 
 export const api = {
     sessions: {
         list: () =>
-            apiClient.get<SessionResponse>('/sessions'),
+            apiClient.getValidated('/sessions', SessionResponseSchema),
 
         get: (sessionId: string) =>
-            apiClient.get<WorkSession>(`/sessions/${sessionId}`),
+            apiClient.getValidated(`/sessions/${sessionId}`, WorkSessionSchema),
 
         create: (data: CreateSessionRequest) =>
-            apiClient.post<WorkSession>('/sessions', data),
+            apiClient.postValidated('/sessions', WorkSessionSchema, data),
 
         activate: (sessionId: string) =>
-            apiClient.put<WorkSession>(`/sessions/${sessionId}/activate`),
+            apiClient.putValidated(`/sessions/${sessionId}/activate`, WorkSessionSchema),
 
         getCurrent: () =>
-            apiClient.get<WorkSession>('/sessions/current'),
+            apiClient.getValidated('/sessions/current', WorkSessionSchema),
     },
 
     batches: {
         list: (sessionId: string) =>
-            apiClient.get<BatchResponse>('/batches', { session_id: sessionId }),
+            apiClient.getValidated('/batches', BatchResponseSchema, { session_id: sessionId }),
     },
 
     stats: {
         get: (sessionId: string) =>
-            apiClient.get<StatsResponse>('/stats', { session_id: sessionId }),
+            apiClient.getValidated('/stats', StatsResponseSchema, { session_id: sessionId }),
     },
 
     logs: {
         list: (sessionId: string) =>
-            apiClient.get<LogsResponse>('/logs', { session_id: sessionId }),
+            apiClient.getValidated('/logs', LogsResponseSchema, { session_id: sessionId }),
     },
 
     conversations: {
         list: (sessionId: string, agent?: string) =>
-            apiClient.get<ConversationSummary[]>('/conversations', { session_id: sessionId, ...(agent ? { agent } : {}) }),
+            apiClient.getValidated('/conversations', z.array(ConversationSummarySchema), { session_id: sessionId, ...(agent ? { agent } : {}) }),
 
         get: (conversationId: string, sessionId?: string) =>
-            apiClient.get<ConversationDetail>(`/conversations/${conversationId}`, sessionId ? { session_id: sessionId } : undefined),
+            apiClient.getValidated(`/conversations/${conversationId}`, ConversationDetailSchema, sessionId ? { session_id: sessionId } : undefined),
     },
 
     admin: {
         clearDatabase: () =>
-            apiClient.post<void>('/admin/clear-database'),
+            apiClient.postValidated<void>('/admin/clear-database', z.void()),
     },
 
     tools: {

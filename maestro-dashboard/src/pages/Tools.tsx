@@ -27,8 +27,8 @@ export default function ToolsPage() {
     // TODO: This endpoint currently returns mock data as the backend implementation is not ready.
     // See src/api/endpoints.ts tools.list() and src/config/constants.ts MOCK_TOOLS.
     api.tools.list()
-      .then((data: any) => {
-        setTools(data);
+      .then((data: unknown) => {
+        setTools(data as Tool[]);
         setLoading(false);
       })
       .catch((err) => {
@@ -95,8 +95,8 @@ export default function ToolsPage() {
               {/* Accent bar */}
               <div
                 className={`absolute top-0 left-0 w-1 h-full ${tool.accentColor} ${tool.status === "active"
-                    ? "shadow-[0_0_15px_rgba(34,197,94,0.4)]"
-                    : ""
+                  ? "shadow-[0_0_15px_rgba(34,197,94,0.4)]"
+                  : ""
                   }`}
               ></div>
 
@@ -146,8 +146,8 @@ export default function ToolsPage() {
                   <div className="flex gap-1">
                     <button
                       className={`p-2 rounded-lg transition-colors ${tool.enabled
-                          ? "text-gray-400 hover:text-white hover:bg-white/5"
-                          : "text-gray-500 cursor-not-allowed"
+                        ? "text-gray-400 hover:text-white hover:bg-white/5"
+                        : "text-gray-500 cursor-not-allowed"
                         }`}
                       title="View Logs"
                       disabled={!tool.enabled}

@@ -1,6 +1,6 @@
 import { useState, useCallback } from "react";
 import type { WorkSession } from "../types/api";
-import type { LogEntry } from "../types/models";
+import type { LogEntry } from "../types/api";
 import { api } from "../api/endpoints";
 
 const MAX_LOGS = 1000;
