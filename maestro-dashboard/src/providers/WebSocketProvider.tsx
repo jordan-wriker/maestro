@@ -1,4 +1,4 @@
-import React, { createContext, useEffect, useMemo } from "react";
+import React, { createContext, useEffect, useMemo, useRef } from "react";
 import type { WorkSession } from "../types/api";
 import type { LogEntry } from "../types/api";
 import { LogEntrySchema } from "../schemas/api";
@@ -36,6 +36,19 @@ function getWebSocketUrl(): string {
 }
 
 export function WebSocketProvider({ children }: { children: React.ReactNode }) {
+    // Development-only render tracking
+    const renderCountRef = useRef(0);
+    useEffect(() => {
+        if (import.meta.env.DEV) {
+            renderCountRef.current++;
+            if (renderCountRef.current > 10) {
+                console.warn(
+                    `[WebSocketProvider] Rendered ${renderCountRef.current} times. Possible infinite loop!`
+                );
+            }
+        }
+    });
+
     const wsUrl = useMemo(() => getWebSocketUrl(), []);
     const { socket, isConnected, connectionError, retry } = useSocketConnection(wsUrl);
     const { logs, currentSession, setCurrentSession, refreshSessions, addLog } = useSessionState();

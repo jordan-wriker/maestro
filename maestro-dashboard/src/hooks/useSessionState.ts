@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import type { WorkSession } from "../types/api";
 import type { LogEntry } from "../types/api";
 import { api } from "../api/endpoints";
@@ -28,8 +28,17 @@ export function useSessionState() {
         });
     }, []);
 
+    const currentSessionRef = useRef<string | null>(null);
+
+    // Add useEffect to keep ref in sync
+    useEffect(() => {
+        currentSessionRef.current = currentSession?.session_id ?? null;
+    }, [currentSession]);
+
     const setCurrentSession = useCallback(async (session: WorkSession) => {
-        const previousSessionId = currentSession?.session_id;
+        console.log('[useSessionState] setCurrentSession called', session.session_id);
+        const previousSessionId = currentSessionRef.current;
+        currentSessionRef.current = session.session_id;
 
         // Optimistically update current session
         setCurrentSessionState(session);
@@ -39,11 +48,11 @@ export function useSessionState() {
             setLogs([]); // Clear logs immediately
             try {
                 const data = await api.logs.list(session.session_id);
+                // Check if session ID is still the same before applying logs
+                if (currentSessionRef.current !== session.session_id) {
+                    return;
+                }
                 if (Array.isArray(data)) {
-                    // We assume the API returns logs in correct order (or we trust the setLogs logic if we needed to sort)
-                    // But usually logs list is the full history.
-                    // We also need to cap initial load if it's huge, though usually we want all context. 
-                    // For now, let's respect the cap even on initial load to be safe.
                     const initialLogs = (data as LogEntry[]).slice(0, MAX_LOGS);
                     setLogs(initialLogs);
                 }
@@ -51,25 +60,22 @@ export function useSessionState() {
                 console.error("Failed to fetch logs for session:", err);
             }
         }
-    }, [currentSession]);
+    }, []); // Empty dependency array - no dependencies needed
 
     const refreshSessions = useCallback(async () => {
+        console.log('[useSessionState] refreshSessions called');
         try {
             try {
-                // Try to get current active session from server
                 const session = await api.sessions.getCurrent();
                 await setCurrentSession(session);
             } catch (err) {
-                // If getCurrent fails (e.g. 404), switch to list
                 const data = await api.sessions.list();
                 if (data.sessions && data.sessions.length > 0) {
-                    // Activate the first session found as fallback
                     const fallbackSession = data.sessions[0];
                     try {
                         const activatedSession = await api.sessions.activate(fallbackSession.session_id);
                         await setCurrentSession(activatedSession);
                     } catch (activateErr) {
-                        // Fallback to just setting it locally if activation fails
                         await setCurrentSession(fallbackSession);
                     }
                 }
@@ -77,7 +83,7 @@ export function useSessionState() {
         } catch (error) {
             console.error("Failed to refresh sessions:", error);
         }
-    }, [setCurrentSession]);
+    }, [setCurrentSession]); // Now setCurrentSession is stable
 
 
     return {

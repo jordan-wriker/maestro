@@ -52,7 +52,8 @@ export function Toast({ id, type, message, duration = 5000, onClose }: ToastProp
     return (
         <div
             className={`
-        flex items-center w-full max-w-sm bg-[#0f0f12] border border-[#27272a] 
+        flex items-center w-full max-w-md 
+        bg-[#0f0f12] border border-[#27272a] 
         shadow-lg rounded-lg pointer-events-auto ring-1 ring-black ring-opacity-5 overflow-hidden
         transition-all duration-300 ease-in-out transform mb-3
         ${isVisible ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0'}
@@ -63,11 +64,11 @@ export function Toast({ id, type, message, duration = 5000, onClose }: ToastProp
                     <div className="flex-shrink-0">
                         {icons[type]}
                     </div>
-                    <div className="ml-3 w-0 flex-1 pt-0.5">
+                    <div className="ml-3 flex-1 pt-0.5 min-w-0">
                         <p className="text-sm font-medium text-gray-200">
                             {type.charAt(0).toUpperCase() + type.slice(1)}
                         </p>
-                        <p className="mt-1 text-sm text-gray-400">
+                        <p className="mt-1 text-sm text-gray-400 break-words max-h-32 overflow-y-auto">
                             {message}
                         </p>
                     </div>

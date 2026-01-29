@@ -62,6 +62,7 @@ export class ApiClient {
     private baseUrl: string;
     public requestInterceptors: Set<RequestInterceptor> = new Set();
     public responseInterceptors: Set<ResponseInterceptor> = new Set();
+    private inFlightRequests = new Map<string, Promise<any>>();
 
     constructor(baseUrl: string = '/api') {
         this.baseUrl = baseUrl;
@@ -79,6 +80,35 @@ export class ApiClient {
     }
 
     private async request<T>(endpoint: string, config: RequestConfig = {}): Promise<T> {
+        // Generate cache key from endpoint + method + params + body
+        // Default to GET if method is undefined, though strictly it should be passed
+        const method = config.method || 'GET';
+        const cacheKey = this.getCacheKey(method, endpoint, config.params, config.body as string);
+
+        // Return existing promise if request is in-flight
+        if (this.inFlightRequests.has(cacheKey)) {
+            return this.inFlightRequests.get(cacheKey)!;
+        }
+
+        // Create new request promise
+        const requestPromise = this.executeRequest<T>(endpoint, config);
+        this.inFlightRequests.set(cacheKey, requestPromise);
+
+        try {
+            const result = await requestPromise;
+            return result;
+        } finally {
+            this.inFlightRequests.delete(cacheKey);
+        }
+    }
+
+    private getCacheKey(method: string, endpoint: string, params?: Record<string, any>, body?: string): string {
+        const paramStr = params ? JSON.stringify(params) : '';
+        const bodyStr = body || '';
+        return `${method}:${endpoint}:${paramStr}:${bodyStr}`;
+    }
+
+    private async executeRequest<T>(endpoint: string, config: RequestConfig = {}): Promise<T> {
         let { params, skipInterceptors, ...init } = config;
 
         // Run request interceptors
@@ -238,11 +268,25 @@ export class ApiClient {
             return result.data;
         }
 
-        const detail = result.error.issues.map((e: z.ZodIssue) => `${e.path.join('.')}: ${e.message}`).join(', ');
+        // Format errors more concisely
+        const errorMessages = result.error.issues.map((e: z.ZodIssue) => {
+            const path = e.path.length > 0 ? `${e.path.join('.')}` : 'root';
+            return `${path}: ${e.message}`;
+        });
+
+        // Limit to first 3 errors to avoid overwhelming the user
+        const displayErrors = errorMessages.slice(0, 3);
+        const moreCount = errorMessages.length - 3;
+        const detail = displayErrors.join('; ') + (moreCount > 0 ? ` (+${moreCount} more)` : '');
+
         const error: APIError = {
-            detail: `Validation Error: ${detail}`,
-            status: 422, // Unprocessable Entity
+            detail: `Validation failed: ${detail}`,
+            status: 422,
         };
+
+        // Also log full error to console for debugging
+        console.error('[API Validation Error]', result.error);
+
         apiState.notifyError(error);
         throw error;
     }

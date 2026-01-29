@@ -22,7 +22,9 @@ export default function CompactStatsCards() {
 
     let isMounted = true;
     let intervalId: ReturnType<typeof setInterval> | null = null;
+
     const loadStats = async () => {
+      if (!isMounted) return; // Add check at start
       try {
         const data = await api.stats.get(currentSession.session_id);
         if (!isMounted) return;
@@ -31,17 +33,19 @@ export default function CompactStatsCards() {
           codexTasks: data?.codexTasks ?? 0,
           avgLatency: data?.avgLatency ?? 0,
         });
-      } catch {
-        // Ignore transient errors; keep defaults.
+      } catch (err) {
+        console.error('[CompactStatsCards] Failed to load stats:', err);
       }
     };
 
     loadStats();
     intervalId = setInterval(loadStats, 5000);
+
     return () => {
       isMounted = false;
-      if (intervalId) {
+      if (intervalId !== null) {
         clearInterval(intervalId);
+        intervalId = null;
       }
     };
   }, [currentSession]);
