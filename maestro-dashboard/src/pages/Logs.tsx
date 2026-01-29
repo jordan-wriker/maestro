@@ -1,33 +1,7 @@
 import { useState, useEffect } from "react";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import ToggleBar from "@/components/ToggleBar";
-
-interface ConversationSummary {
-  conversation_id: string; // Changed from id to match backend
-  agent: "claude" | "codex";
-  created_at: string;
-  status: "completed" | "error" | "active";
-  task: string;
-  final_response: string;
-  last_activity?: string;
-}
-
-interface SessionEvent {
-  type: "prompt" | "system" | "response" | "tool_call" | "result" | "thinking" | "reasoning";
-  content: string;
-  tool?: string;
-  output?: string;
-  timestamp?: string;
-}
-
-interface ConversationDetail {
-  conversation_id: string; // Changed
-  agent: "claude" | "codex";
-  created_at: string;
-  events: SessionEvent[];
-  status: "completed" | "error" | "active";
-  task: string;
-}
+import type { ConversationSummary, SessionEvent, ConversationDetail } from "../types/models";
 
 export default function LogsPage() {
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);

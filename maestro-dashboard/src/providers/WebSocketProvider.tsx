@@ -1,16 +1,6 @@
 import React, { createContext, useEffect, useState } from "react";
 import type { WorkSession } from "../types/api";
-
-export interface LogEntry {
-    id: number;
-    timestamp: string;
-    agent: string;
-    task: string;
-    final_response?: string;
-    conversation_id?: string;
-    status: string;
-    events?: unknown[];
-}
+import type { LogEntry } from "../types/models";
 
 interface WebSocketContextType {
     logs: LogEntry[];

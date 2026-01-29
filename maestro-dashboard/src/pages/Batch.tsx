@@ -4,7 +4,8 @@ import type { Batch as APIBatch } from "../types/api";
 
 
 
-interface LogEntry {
+
+interface BatchLogUI {
   time: string;
   source: string;
   sourceColor: string;
@@ -12,7 +13,7 @@ interface LogEntry {
   isWarning?: boolean;
 }
 
-const logEntries: LogEntry[] = [
+const logEntries: BatchLogUI[] = [
   {
     time: "10:45:01",
     source: "MANAGER",
