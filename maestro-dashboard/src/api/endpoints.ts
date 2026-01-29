@@ -1,5 +1,6 @@
 
 import { apiClient } from './client';
+import { MOCK_TOOLS } from '@/config/constants';
 import type {
     WorkSession,
     SessionResponse,
@@ -54,5 +55,9 @@ export const api = {
     admin: {
         clearDatabase: () =>
             apiClient.post<void>('/admin/clear-database'),
+    },
+
+    tools: {
+        list: () => Promise.resolve(MOCK_TOOLS),
     }
 };

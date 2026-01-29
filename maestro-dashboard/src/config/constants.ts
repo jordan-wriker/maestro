@@ -44,20 +44,26 @@ export const AGENT_COLORS: Record<string, { bg: string; border: string; text: st
     },
 };
 
-export const STATUS_CONFIG: Record<string, { dotClass: string; textClass: string; label: string }> = {
+export const STATUS_CONFIG: Record<string, { dotClass: string; textClass: string; bgClass: string; borderClass: string; label: string }> = {
     active: {
         dotClass: "bg-green-500 shadow-[0_0_10px_rgba(74,222,128,0.5)]",
         textClass: "text-green-500",
+        bgClass: "bg-green-500/10",
+        borderClass: "border-green-500/20",
         label: "Active",
     },
     idle: {
         dotClass: "bg-amber-500",
         textClass: "text-amber-500",
+        bgClass: "bg-amber-500/10",
+        borderClass: "border-amber-500/20",
         label: "Idle",
     },
     archived: {
         dotClass: "bg-gray-500",
         textClass: "text-gray-500",
+        bgClass: "bg-gray-500/10",
+        borderClass: "border-gray-500/20",
         label: "Archived",
     },
 };
@@ -120,5 +126,90 @@ export const MOCK_BATCH_LOGS = [
         source: "SUCCESS",
         sourceColor: "text-green-400",
         message: "Task completion verified and stored",
+    },
+];
+
+export const MOCK_TOOLS = [
+    {
+        id: "file-search",
+        name: "File Search",
+        description:
+            "Semantic search over vectorized documentation and codebase assets.",
+        icon: "search",
+        iconGradient: "from-blue-500/20 to-indigo-600/20",
+        iconColor: "text-indigo-400",
+        enabled: true,
+        status: "active",
+        statusColor: "text-green-500",
+        accentColor: "bg-green-500",
+        toggleColor: "peer-checked:bg-green-500",
+    },
+    {
+        id: "code-interpreter",
+        name: "Code Interpreter",
+        description:
+            "Sandboxed Python execution environment for data analysis and complex logic.",
+        icon: "data_object",
+        iconGradient: "from-purple-500/20 to-pink-600/20",
+        iconColor: "text-purple-400",
+        enabled: true,
+        status: "active",
+        statusColor: "text-purple-400",
+        accentColor: "bg-purple-500",
+        toggleColor: "peer-checked:bg-primary",
+    },
+    {
+        id: "dalle-generator",
+        name: "DALL-E Generator",
+        description:
+            "Image generation module for visual assets creation from textual descriptions.",
+        icon: "image",
+        iconGradient: "from-orange-500/10 to-amber-600/10",
+        iconColor: "text-orange-400",
+        enabled: false,
+        status: "inactive",
+        statusColor: "text-gray-500",
+        accentColor: "bg-gray-600",
+        toggleColor: "peer-checked:bg-green-500",
+    },
+    {
+        id: "weather-connect",
+        name: "Weather Connect",
+        description: "Real-time global weather data fetching and forecast analysis.",
+        icon: "cloud",
+        iconGradient: "from-cyan-500/20 to-blue-600/20",
+        iconColor: "text-blue-400",
+        enabled: true,
+        status: "active",
+        statusColor: "text-blue-400",
+        accentColor: "bg-blue-400",
+        toggleColor: "peer-checked:bg-blue-500",
+    },
+    {
+        id: "github-integration",
+        name: "GitHub Integration",
+        description:
+            "Direct access to repositories, issues, and pull requests for context awareness.",
+        icon: "source",
+        iconGradient: "from-gray-700/50 to-black/50",
+        iconColor: "text-gray-200",
+        enabled: false,
+        status: "setup_required",
+        statusColor: "text-yellow-500",
+        accentColor: "bg-yellow-500",
+        toggleColor: "peer-checked:bg-green-500",
+    },
+    {
+        id: "slack-notifier",
+        name: "Slack Notifier",
+        description: "Send notifications and summaries to specified Slack channels.",
+        icon: "chat",
+        iconGradient: "from-red-500/20 to-yellow-500/20",
+        iconColor: "text-pink-500",
+        enabled: true,
+        status: "active",
+        statusColor: "text-green-500",
+        accentColor: "bg-green-500",
+        toggleColor: "peer-checked:bg-green-500",
     },
 ];

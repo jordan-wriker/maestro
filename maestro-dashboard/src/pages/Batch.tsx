@@ -1,78 +1,62 @@
 import { useState, useEffect } from "react";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import type { Batch as APIBatch } from "../types/api";
+import type { LogEntry } from "../types/models";
 import { api } from "../api/endpoints";
-
-
-
-
-
-
-import { BATCH_STATUS_COLORS, MOCK_BATCH_LOGS } from "@/config/constants";
-
-const logEntries = MOCK_BATCH_LOGS;
-
-function getStatusConfig(status: string) {
-  const s = status.toLowerCase();
-  if (["running", "processing", "pending"].includes(s)) {
-    return {
-      label: s.toUpperCase(),
-      ...BATCH_STATUS_COLORS.running,
-    };
-  }
-  if (["failed", "error", "partial_failure"].includes(s)) {
-    return {
-      label: s.toUpperCase(),
-      ...BATCH_STATUS_COLORS.failed,
-    };
-  }
-  if (["completed", "success"].includes(s)) {
-    return {
-      label: s.toUpperCase(),
-      ...BATCH_STATUS_COLORS.completed,
-    };
-  }
-  return {
-    label: s.toUpperCase(),
-    ...BATCH_STATUS_COLORS.default,
-  };
-}
+import { StatusBadge } from "@/components/ui/StatusBadge";
+import { StatsCard } from "@/components/ui/StatsCard";
+import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
+import { AGENT_COLORS } from "@/config/constants";
 
 export default function BatchPage() {
   const { currentSession } = useWebSocket();
   const [batches, setBatches] = useState<APIBatch[]>([]);
+  const [logs, setLogs] = useState<LogEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [autoRefresh] = useState(true);
 
-  const fetchBatches = async (isInitial = false) => {
+  const fetchData = async (isInitial = false) => {
     if (!currentSession) {
       setBatches([]);
+      setLogs([]);
       setLoading(false);
       return;
     }
     if (isInitial) {
       setLoading(true);
       setBatches([]);
+      setLogs([]);
     }
     try {
-      const data = await api.batches.list(currentSession.session_id);
-      setBatches(data);
+      const [batchesData, logsData] = await Promise.all([
+        api.batches.list(currentSession.session_id),
+        api.logs.list(currentSession.session_id)
+      ]);
+      setBatches(batchesData);
+      setLogs(logsData);
     } catch (error) {
-      console.error('Failed to fetch batches:', error);
+      console.error('Failed to fetch batch data:', error);
     } finally {
       if (isInitial) setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchBatches(true);
+    fetchData(true);
 
     let interval: number | undefined;
     if (autoRefresh) {
-      interval = window.setInterval(() => fetchBatches(false), 5000);
+      interval = window.setInterval(() => fetchData(false), 5000);
     }
     return () => clearInterval(interval);
   }, [currentSession, autoRefresh]);
+
+  // Derived metrics
+  const activeBatches = batches.filter(b => ["pending", "running", "processing"].includes(b.status.toLowerCase())).length;
+  const completedBatches = batches.filter(b => ["completed", "success"].includes(b.status.toLowerCase())).length;
+  const successRate = batches.length > 0
+    ? Math.round((completedBatches / batches.length) * 100)
+    : 0;
 
   return (
     <div className="p-4 h-full overflow-y-auto space-y-4">
@@ -86,7 +70,7 @@ export default function BatchPage() {
         </div>
         <div className="flex items-center gap-3">
           <button
-            onClick={() => fetchBatches()}
+            onClick={() => fetchData()}
             className="bg-white/5 hover:bg-white/10 border border-white/10 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2"
           >
             <span className="material-icons-round text-lg">refresh</span>
@@ -105,42 +89,29 @@ export default function BatchPage() {
           </a>
         </div>
       ) : loading ? (
-        <div className="flex items-center justify-center py-20">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-        </div>
+        <LoadingSpinner />
       ) : (
         <>
           {/* Stats Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="bg-surface-dark p-6 rounded-2xl border border-white/5 shadow-sm relative overflow-hidden group">
-              <h3 className="text-gray-400 text-sm font-medium mb-2">Active Batches</h3>
-              <div className="flex items-baseline gap-2">
-                <span className="text-3xl font-bold text-white">
-                  {batches.filter(b => ["pending", "running", "processing"].includes(b.status.toLowerCase())).length}
-                </span>
-                <span className="text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded">Current</span>
-              </div>
-            </div>
-
-            <div className="bg-surface-dark p-6 rounded-2xl border border-white/5 shadow-sm relative overflow-hidden group">
-              <h3 className="text-gray-400 text-sm font-medium mb-2">Completed</h3>
-              <div className="flex items-baseline gap-2">
-                <span className="text-3xl font-bold text-white">
-                  {batches.filter(b => ["completed", "success"].includes(b.status.toLowerCase())).length}
-                </span>
-                <span className="text-xs font-medium text-green-500 bg-green-500/10 px-2 py-0.5 rounded">Total</span>
-              </div>
-            </div>
-
-            <div className="bg-surface-dark p-6 rounded-2xl border border-white/5 shadow-sm relative overflow-hidden group">
-              <h3 className="text-gray-400 text-sm font-medium mb-2">Success Rate</h3>
-              <div className="flex items-baseline gap-2">
-                <span className="text-3xl font-bold text-white">
-                  {batches.length > 0 ? Math.round((batches.filter(b => ["completed", "success"].includes(b.status.toLowerCase())).length / batches.length) * 100) : 0}%
-                </span>
-                <span className="text-xs font-medium text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded">Global</span>
-              </div>
-            </div>
+            <StatsCard
+              title="Active Batches"
+              value={activeBatches}
+              subValue="Current"
+              subValueColor="text-primary bg-primary/10"
+            />
+            <StatsCard
+              title="Completed"
+              value={completedBatches}
+              subValue="Total"
+              subValueColor="text-green-500 bg-green-500/10"
+            />
+            <StatsCard
+              title="Success Rate"
+              value={`${successRate}%`}
+              subValue="Global"
+              subValueColor="text-blue-400 bg-blue-500/10"
+            />
           </div>
 
           {/* Recent Batch Operations */}
@@ -159,7 +130,6 @@ export default function BatchPage() {
               </div>
             ) : (
               batches.map((batch) => {
-                const statusConfig = getStatusConfig(batch.status);
                 const progress = Math.round(batch.progress);
                 const isSuccess = ["completed", "success"].includes(batch.status.toLowerCase());
                 const isError = ["failed", "error", "partial_failure"].includes(batch.status.toLowerCase());
@@ -174,15 +144,13 @@ export default function BatchPage() {
                       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-3 mb-2 flex-wrap">
-                            <span className={`font-mono text-sm font-bold ${statusConfig.idColor}`}>
+                            <span className={`font-mono text-sm font-bold ${isSuccess ? "text-green-500" : isError ? "text-yellow-500" : "text-primary"}`}>
                               #{batch.batch_id}
                             </span>
                             <span className="text-xs text-gray-500">
                               Updated: {new Date(batch.updated_at).toLocaleTimeString()}
                             </span>
-                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${statusConfig.bgColor} ${statusConfig.textColor} border ${statusConfig.borderColor} tracking-wider`}>
-                              {statusConfig.label}
-                            </span>
+                            <StatusBadge status={batch.status} type="batch" />
                           </div>
 
                           <div className="space-y-2">
@@ -224,6 +192,7 @@ export default function BatchPage() {
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                           {batch.tasks && batch.tasks.map((task) => {
+                            // Status Mapping for tasks - handled manually here for specific visual style desired for tasks
                             const isTaskCompleted = ["completed", "success"].includes(task.status.toLowerCase());
                             const isTaskRunning = ["running", "processing"].includes(task.status.toLowerCase());
                             const isTaskFailed = ["failed", "error"].includes(task.status.toLowerCase());
@@ -237,7 +206,7 @@ export default function BatchPage() {
                               cardClass = "bg-white/[0.02] border-white/5";
                               dotClass = "bg-green-500 shadow-[0_0_10px_rgba(74,222,128,0.4)]";
                               statusText = "COMPLETED";
-                              statusColor = "text-gray-500"; // Based on code.html mock
+                              statusColor = "text-gray-500";
                             } else if (isTaskRunning) {
                               cardClass = "bg-white/[0.05] border-primary/30";
                               dotClass = "bg-primary animate-pulse shadow-[0_0_20px_rgba(124,58,237,0.4)]";
@@ -285,15 +254,34 @@ export default function BatchPage() {
           </div>
         </div>
         <div className="flex-1 overflow-y-auto p-4 font-mono text-xs space-y-1.5 scrollbar-hide">
-          {logEntries.map((log, index) => (
-            <div key={index} className="flex gap-4 text-gray-500">
-              <span className="w-20 shrink-0">{log.time}</span>
-              <span className={log.sourceColor}>[{log.source}]</span>
-              <span className={log.isWarning ? "text-yellow-400/80" : "text-gray-300"}>
-                {log.message}
-              </span>
-            </div>
-          ))}
+          {logs.length === 0 ? (
+            <div className="text-gray-600 italic px-2">No execution logs available.</div>
+          ) : (
+            logs.map((log, index) => {
+              // Simple color mapping if AGENT_COLORS has keys matching
+              // If not, fall back to gray/white
+              // AGENT_COLORS keys: blue, green, purple, orange.
+              // Agents usually: Claude (purple?), GPT (green?) - need to check constants.
+              // Assuming agents might be random strings, we might just default or try to match.
+
+              const isWarning = log.status === 'error'; // simplified assumption
+              let sourceColor = "text-gray-400";
+              const agentLower = log.agent.toLowerCase();
+              if (agentLower.includes('claude')) sourceColor = AGENT_COLORS.purple?.text || "text-purple-400";
+              else if (agentLower.includes('gpt')) sourceColor = AGENT_COLORS.green?.text || "text-green-400";
+              else if (agentLower.includes('manager')) sourceColor = AGENT_COLORS.blue?.text || "text-blue-400";
+
+              return (
+                <div key={index} className="flex gap-4 text-gray-500">
+                  <span className="w-20 shrink-0">{new Date(log.timestamp).toLocaleTimeString()}</span>
+                  <span className={sourceColor}>[{log.agent.toUpperCase()}]</span>
+                  <span className={isWarning ? "text-yellow-400/80" : "text-gray-300"}>
+                    {log.task || log.final_response || "Processing..."}
+                  </span>
+                </div>
+              );
+            })
+          )}
         </div>
       </div>
     </div>

@@ -1,5 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { api } from "../api/endpoints";
+import { StatusBadge } from "@/components/ui/StatusBadge";
+import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
 
+// Match the structure of MOCK_TOOLS in constants
 interface Tool {
   id: string;
   name: string;
@@ -8,100 +12,30 @@ interface Tool {
   iconGradient: string;
   iconColor: string;
   enabled: boolean;
-  status: "active" | "inactive" | "setup_required";
-  statusColor: string;
+  status: string;
+  statusColor?: string; // Optional as we use StatusBadge logic mostly
   accentColor: string;
   toggleColor: string;
 }
 
-const initialTools: Tool[] = [
-  {
-    id: "file-search",
-    name: "File Search",
-    description:
-      "Semantic search over vectorized documentation and codebase assets.",
-    icon: "search",
-    iconGradient: "from-blue-500/20 to-indigo-600/20",
-    iconColor: "text-indigo-400",
-    enabled: true,
-    status: "active",
-    statusColor: "text-green-500",
-    accentColor: "bg-green-500",
-    toggleColor: "peer-checked:bg-green-500",
-  },
-  {
-    id: "code-interpreter",
-    name: "Code Interpreter",
-    description:
-      "Sandboxed Python execution environment for data analysis and complex logic.",
-    icon: "data_object",
-    iconGradient: "from-purple-500/20 to-pink-600/20",
-    iconColor: "text-purple-400",
-    enabled: true,
-    status: "active",
-    statusColor: "text-purple-400",
-    accentColor: "bg-purple-500",
-    toggleColor: "peer-checked:bg-primary",
-  },
-  {
-    id: "dalle-generator",
-    name: "DALL-E Generator",
-    description:
-      "Image generation module for visual assets creation from textual descriptions.",
-    icon: "image",
-    iconGradient: "from-orange-500/10 to-amber-600/10",
-    iconColor: "text-orange-400",
-    enabled: false,
-    status: "inactive",
-    statusColor: "text-gray-500",
-    accentColor: "bg-gray-600",
-    toggleColor: "peer-checked:bg-green-500",
-  },
-  {
-    id: "weather-connect",
-    name: "Weather Connect",
-    description: "Real-time global weather data fetching and forecast analysis.",
-    icon: "cloud",
-    iconGradient: "from-cyan-500/20 to-blue-600/20",
-    iconColor: "text-blue-400",
-    enabled: true,
-    status: "active",
-    statusColor: "text-blue-400",
-    accentColor: "bg-blue-400",
-    toggleColor: "peer-checked:bg-blue-500",
-  },
-  {
-    id: "github-integration",
-    name: "GitHub Integration",
-    description:
-      "Direct access to repositories, issues, and pull requests for context awareness.",
-    icon: "source",
-    iconGradient: "from-gray-700/50 to-black/50",
-    iconColor: "text-gray-200",
-    enabled: false,
-    status: "setup_required",
-    statusColor: "text-yellow-500",
-    accentColor: "bg-yellow-500",
-    toggleColor: "peer-checked:bg-green-500",
-  },
-  {
-    id: "slack-notifier",
-    name: "Slack Notifier",
-    description: "Send notifications and summaries to specified Slack channels.",
-    icon: "chat",
-    iconGradient: "from-red-500/20 to-yellow-500/20",
-    iconColor: "text-pink-500",
-    enabled: true,
-    status: "active",
-    statusColor: "text-green-500",
-    accentColor: "bg-green-500",
-    toggleColor: "peer-checked:bg-green-500",
-  },
-];
-
 export default function ToolsPage() {
-  const [tools, setTools] = useState<Tool[]>(initialTools);
+  const [tools, setTools] = useState<Tool[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+
+  useEffect(() => {
+    // TODO: This endpoint currently returns mock data as the backend implementation is not ready.
+    // See src/api/endpoints.ts tools.list() and src/config/constants.ts MOCK_TOOLS.
+    api.tools.list()
+      .then((data: any) => {
+        setTools(data);
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error("Failed to fetch tools:", err);
+        setLoading(false);
+      });
+  }, []);
 
   const toggleTool = (id: string) => {
     setTools((prev) =>
@@ -147,100 +81,74 @@ export default function ToolsPage() {
         </div>
       </div>
 
-      {/* Tools Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredTools.map((tool) => (
-          <div
-            key={tool.id}
-            className={`bg-[#151519] p-6 rounded-2xl border border-white/5 shadow-sm group hover:border-primary/40 transition-all duration-300 relative overflow-hidden flex flex-col ${
-              !tool.enabled ? "opacity-75 hover:opacity-100" : ""
-            }`}
-          >
-            {/* Accent bar */}
+      {loading ? (
+        <LoadingSpinner />
+      ) : (
+        /* Tools Grid */
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredTools.map((tool) => (
             <div
-              className={`absolute top-0 left-0 w-1 h-full ${tool.accentColor} ${
-                tool.status === "active"
-                  ? "shadow-[0_0_15px_rgba(34,197,94,0.4)]"
-                  : ""
-              }`}
-            ></div>
-
-            {/* Header */}
-            <div className="flex justify-between items-start mb-5 pl-3">
+              key={tool.id}
+              className={`bg-[#151519] p-6 rounded-2xl border border-white/5 shadow-sm group hover:border-primary/40 transition-all duration-300 relative overflow-hidden flex flex-col ${!tool.enabled ? "opacity-75 hover:opacity-100" : ""
+                }`}
+            >
+              {/* Accent bar */}
               <div
-                className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${tool.iconGradient} border border-white/10 flex items-center justify-center ${tool.iconColor} ${!tool.enabled ? "grayscale" : ""}`}
-              >
-                <span className="material-icons-round text-3xl">{tool.icon}</span>
-              </div>
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={tool.enabled}
-                  onChange={() => toggleTool(tool.id)}
-                  className="sr-only peer"
-                />
+                className={`absolute top-0 left-0 w-1 h-full ${tool.accentColor} ${tool.status === "active"
+                    ? "shadow-[0_0_15px_rgba(34,197,94,0.4)]"
+                    : ""
+                  }`}
+              ></div>
+
+              {/* Header */}
+              <div className="flex justify-between items-start mb-5 pl-3">
                 <div
-                  className={`w-11 h-6 bg-white/10 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all ${tool.toggleColor}`}
-                ></div>
-              </label>
-            </div>
+                  className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${tool.iconGradient} border border-white/10 flex items-center justify-center ${tool.iconColor} ${!tool.enabled ? "grayscale" : ""}`}
+                >
+                  <span className="material-icons-round text-3xl">{tool.icon}</span>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={tool.enabled}
+                    onChange={() => toggleTool(tool.id)}
+                    className="sr-only peer"
+                  />
+                  <div
+                    className={`w-11 h-6 bg-white/10 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all ${tool.toggleColor}`}
+                  ></div>
+                </label>
+              </div>
 
-            {/* Content */}
-            <div className="pl-3 flex-1">
-              <h3
-                className={`text-xl font-bold tracking-tight ${
-                  tool.enabled ? "text-white" : "text-gray-400"
-                }`}
-              >
-                {tool.name}
-              </h3>
-              <p
-                className={`text-sm mt-2 leading-relaxed ${
-                  tool.enabled ? "text-gray-400" : "text-gray-500"
-                }`}
-              >
-                {tool.description}
-              </p>
-            </div>
-
-            {/* Footer */}
-            <div className="pl-3 mt-6 pt-6 border-t border-white/5 flex items-center justify-between">
-              {tool.status === "setup_required" ? (
-                <>
-                  <span className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-yellow-500/10 text-yellow-500 text-xs font-semibold border border-yellow-500/20">
-                    <span className="w-2 h-2 rounded-full bg-yellow-500"></span>
-                    Setup Required
-                  </span>
-                  <button className="px-3 py-1.5 bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-500 rounded-lg text-xs font-medium transition-colors border border-yellow-500/20">
-                    Configure API Key
-                  </button>
-                </>
-              ) : (
-                <>
-                  <span
-                    className={`inline-flex items-center gap-2 px-2.5 py-1 rounded-full text-xs font-semibold border ${
-                      tool.enabled
-                        ? `bg-green-500/10 ${tool.statusColor} border-green-500/20`
-                        : "bg-gray-500/10 text-gray-500 border-gray-500/20"
+              {/* Content */}
+              <div className="pl-3 flex-1">
+                <h3
+                  className={`text-xl font-bold tracking-tight ${tool.enabled ? "text-white" : "text-gray-400"
                     }`}
-                  >
-                    {tool.enabled && tool.status === "active" ? (
-                      <span className="relative flex h-2 w-2">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                        <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
-                      </span>
-                    ) : (
-                      <span className="w-2 h-2 rounded-full bg-gray-500"></span>
-                    )}
-                    {tool.enabled ? "Active" : "Inactive"}
-                  </span>
+                >
+                  {tool.name}
+                </h3>
+                <p
+                  className={`text-sm mt-2 leading-relaxed ${tool.enabled ? "text-gray-400" : "text-gray-500"
+                    }`}
+                >
+                  {tool.description}
+                </p>
+              </div>
+
+              {/* Footer */}
+              <div className="pl-3 mt-6 pt-6 border-t border-white/5 flex items-center justify-between">
+                <div>
+                  <StatusBadge status={tool.status} />
+                </div>
+
+                {tool.status !== "setup_required" && (
                   <div className="flex gap-1">
                     <button
-                      className={`p-2 rounded-lg transition-colors ${
-                        tool.enabled
+                      className={`p-2 rounded-lg transition-colors ${tool.enabled
                           ? "text-gray-400 hover:text-white hover:bg-white/5"
                           : "text-gray-500 cursor-not-allowed"
-                      }`}
+                        }`}
                       title="View Logs"
                       disabled={!tool.enabled}
                     >
@@ -255,12 +163,17 @@ export default function ToolsPage() {
                       <span className="material-icons-round text-xl">tune</span>
                     </button>
                   </div>
-                </>
-              )}
+                )}
+                {tool.status === "setup_required" && (
+                  <button className="px-3 py-1.5 bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-500 rounded-lg text-xs font-medium transition-colors border border-yellow-500/20">
+                    Configure API Key
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
