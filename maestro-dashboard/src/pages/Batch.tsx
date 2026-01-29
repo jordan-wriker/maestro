@@ -5,83 +5,35 @@ import type { Batch as APIBatch } from "../types/api";
 
 
 
-interface BatchLogUI {
-  time: string;
-  source: string;
-  sourceColor: string;
-  message: string;
-  isWarning?: boolean;
-}
 
-const logEntries: BatchLogUI[] = [
-  {
-    time: "10:45:01",
-    source: "MANAGER",
-    sourceColor: "text-primary",
-    message: "Spawning agent sub-process for task execution",
-  },
-  {
-    time: "10:45:02",
-    source: "CLAUDE",
-    sourceColor: "text-blue-400",
-    message: "Context window initialized (200k tokens available)",
-  },
-  {
-    time: "10:45:05",
-    source: "GPT-4O",
-    sourceColor: "text-purple-400",
-    message: 'Tool calling requested: "file_system_search"',
-  },
-  {
-    time: "10:45:10",
-    source: "SYSTEM",
-    sourceColor: "text-yellow-500",
-    message: "Warning: Latency spike detected on gateway (450ms)",
-    isWarning: true,
-  },
-  {
-    time: "10:45:12",
-    source: "SUCCESS",
-    sourceColor: "text-green-400",
-    message: "Task completion verified and stored",
-  },
-];
+
+import { BATCH_STATUS_COLORS, MOCK_BATCH_LOGS } from "@/config/constants";
+
+const logEntries = MOCK_BATCH_LOGS;
 
 function getStatusConfig(status: string) {
   const s = status.toLowerCase();
-  if (s === "running" || s === "processing" || s === "pending") {
+  if (["running", "processing", "pending"].includes(s)) {
     return {
       label: s.toUpperCase(),
-      bgColor: "bg-primary/10",
-      textColor: "text-primary",
-      borderColor: "border-primary/20",
-      idColor: "text-primary",
+      ...BATCH_STATUS_COLORS.running,
     };
   }
-  if (s === "failed" || s === "error" || s === "partial_failure") {
+  if (["failed", "error", "partial_failure"].includes(s)) {
     return {
       label: s.toUpperCase(),
-      bgColor: "bg-yellow-500/10",
-      textColor: "text-yellow-500",
-      borderColor: "border-yellow-500/20",
-      idColor: "text-yellow-500",
+      ...BATCH_STATUS_COLORS.failed,
     };
   }
-  if (s === "completed" || s === "success") {
+  if (["completed", "success"].includes(s)) {
     return {
       label: s.toUpperCase(),
-      bgColor: "bg-green-500/10",
-      textColor: "text-green-500",
-      borderColor: "border-green-500/20",
-      idColor: "text-green-500",
+      ...BATCH_STATUS_COLORS.completed,
     };
   }
   return {
     label: s.toUpperCase(),
-    bgColor: "bg-gray-500/10",
-    textColor: "text-gray-500",
-    borderColor: "border-gray-500/20",
-    idColor: "text-gray-500",
+    ...BATCH_STATUS_COLORS.default,
   };
 }
 

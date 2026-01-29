@@ -2,18 +2,10 @@ import { Link, useLocation } from "react-router-dom";
 import { useState } from "react";
 import { useWebSocket } from "@/hooks/useWebSocket";
 
-const navItems = [
-  { href: "/", label: "Overview", icon: "dashboard" },
-  { href: "/sessions", label: "Sessions", icon: "workspaces" },
-  { href: "/batch", label: "Batch Tasks", icon: "account_tree" },
-  { href: "/tools", label: "Tools", icon: "extension" },
-  { href: "/logs", label: "Agents", icon: "smart_toy" },
-];
+import { NAV_ITEMS, CONFIG_ITEMS, USER_PROFILE } from "@/config/constants";
 
-const configItems = [
-  { href: "/settings", label: "Settings", icon: "settings" },
-  { href: "#", label: "API Keys", icon: "key" },
-];
+const navItems = NAV_ITEMS;
+const configItems = CONFIG_ITEMS;
 
 export default function Sidebar() {
   const location = useLocation();
@@ -139,12 +131,12 @@ export default function Sidebar() {
           className={`flex items-center ${collapsed ? "justify-center" : ""}`}
         >
           <div className="w-9 h-9 rounded-full bg-gradient-to-br from-primary to-pink-500 flex-shrink-0 flex items-center justify-center text-white font-medium text-sm">
-            AU
+            {USER_PROFILE.initials}
           </div>
           {!collapsed && (
             <div className="ml-3 overflow-hidden">
-              <p className="text-sm font-medium text-white">Admin User</p>
-              <p className="text-xs text-gray-400">admin@mcp.local</p>
+              <p className="text-sm font-medium text-white">{USER_PROFILE.name}</p>
+              <p className="text-xs text-gray-400">{USER_PROFILE.email}</p>
             </div>
           )}
         </div>

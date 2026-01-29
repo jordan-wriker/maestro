@@ -2,51 +2,12 @@ import { useState, useEffect } from "react";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import type { WorkSession } from "../types/api";
 
-const agentColorClasses: Record<string, { bg: string; border: string; text: string; dot: string }> = {
-  blue: {
-    bg: "bg-blue-500/10",
-    border: "border-blue-500/20",
-    text: "text-blue-400",
-    dot: "bg-blue-400",
-  },
-  green: {
-    bg: "bg-emerald-500/10",
-    border: "border-emerald-500/20",
-    text: "text-emerald-400",
-    dot: "bg-emerald-400",
-  },
-  purple: {
-    bg: "bg-purple-500/10",
-    border: "border-purple-500/20",
-    text: "text-purple-400",
-    dot: "bg-purple-400",
-  },
-  orange: {
-    bg: "bg-orange-500/10",
-    border: "border-orange-500/20",
-    text: "text-orange-400",
-    dot: "bg-orange-400",
-  },
-};
+import { AGENT_COLORS, STATUS_CONFIG } from "@/config/constants";
+
+const agentColorClasses = AGENT_COLORS;
 
 function StatusBadge({ status, isCurrent }: { status: string; isCurrent: boolean }) {
-  const config: Record<string, { dotClass: string; textClass: string; label: string }> = {
-    active: {
-      dotClass: "bg-green-500 shadow-[0_0_10px_rgba(74,222,128,0.5)]",
-      textClass: "text-green-500",
-      label: "Active",
-    },
-    idle: {
-      dotClass: "bg-amber-500",
-      textClass: "text-amber-500",
-      label: "Idle",
-    },
-    archived: {
-      dotClass: "bg-gray-500",
-      textClass: "text-gray-500",
-      label: "Archived",
-    },
-  };
+  const config = STATUS_CONFIG;
 
   const currentConfig = config[status.toLowerCase()] || config.idle;
 

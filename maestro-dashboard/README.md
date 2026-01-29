@@ -1,73 +1,64 @@
-# React + TypeScript + Vite
+# Maestro Dashboard
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A comprehensive dashboard for managing and monitoring agent-based workflows, sessions, and batch tasks.
 
-Currently, two official plugins are available:
+## Table of Contents
+- [Setup](#setup)
+- [Architecture](#architecture)
+- [Development Guide](#development-guide)
+- [Configuration](#configuration)
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## Setup
 
-## React Compiler
+### Prerequisites
+- Node.js (v16+)
+- npm or yarn
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+### Installation
 
-## Expanding the ESLint configuration
+1. Clone the repository.
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+### Running Locally
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+Start the development server:
+```bash
+npm run dev
 ```
+Access the application at `http://localhost:5173`.
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Architecture
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+This project is built with:
+- **Vite**: Fast build tool and dev server.
+- **React**: UI library.
+- **TypeScript**: Static typing.
+- **Tailwind CSS**: Utility-first styling.
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+### Key Components
+
+- **Sidebar (`src/components/Sidebar.tsx`)**: Main navigation. Configurable via `src/config/constants.ts`.
+- **Sessions (`src/pages/Sessions.tsx`)**: Manages work sessions (workspaces).
+- **Batch (`src/pages/Batch.tsx`)**: Monitors parallel batch tasks using WebSocket or polling.
+
+### State Management
+- **WebSocket Hook (`src/hooks/useWebSocket`)**: Manages real-time connection to the orchestration server.
+- **Constants (`src/config/constants.ts`)**: Centralized configuration for UI elements.
+
+## Development Guide
+
+### Adding Navigation Items
+Edit `src/config/constants.ts` and update `NAV_ITEMS` or `CONFIG_ITEMS`.
+
+### Customizing Colors
+Update `AGENT_COLORS` or `STATUS_CONFIG` in `src/config/constants.ts` to change the appearance of agents and status badges.
+
+### Mock Data
+Mock data for development (e.g., initial logs) is stored in `src/config/constants.ts`.
+
+## Configuration
+
+The dashboard connects to an backend API. Ensure the API server is running and accessible (defaulting to the same host via proxy or configured URL).
