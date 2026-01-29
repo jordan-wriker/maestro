@@ -1,12 +1,13 @@
 import { useState, useEffect } from "react";
 import { useWebSocket } from "@/hooks/useWebSocket";
-import ToggleBar from "@/components/ToggleBar";
-import type { ConversationSummary, SessionEvent, ConversationDetail } from "../types/models";
+import type { ConversationSummary, SessionEvent, ConversationDetail as ConversationDetailType } from "../types/models";
 import { api } from "../api/endpoints";
+import ConversationList from "@/components/logs/ConversationList";
+import ConversationDetail from "@/components/logs/ConversationDetail";
 
 export default function LogsPage() {
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
-  const [selectedConversation, setSelectedConversation] = useState<ConversationDetail | null>(null);
+  const [selectedConversation, setSelectedConversation] = useState<ConversationDetailType | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [filter, setFilter] = useState<"all" | "claude" | "codex">("all");
   const [conversationsPanelCollapsed, setConversationsPanelCollapsed] = useState(false);
@@ -148,6 +149,7 @@ export default function LogsPage() {
       if (!currentSession) {
         setConversations([]);
         setSelectedConversation(null);
+        setLoading(false);
         return;
       }
       setSelectedConversation(null);
@@ -216,426 +218,32 @@ export default function LogsPage() {
     s.conversation_id.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const getAgentColor = (agent: string) => {
-    return agent === "claude"
-      ? "bg-purple-500/10 text-purple-400 border-purple-500/20"
-      : "bg-green-500/10 text-green-400 border-green-500/20";
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "active":
-        return "text-primary";
-      case "error":
-        return "text-red-400";
-      default:
-        return "text-gray-500";
-    }
-  };
-
   return (
     <div className="flex-1 flex overflow-hidden">
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col bg-[#050505] relative min-w-0">
-        {/* Header */}
-        <div className="h-16 border-b border-white/5 flex justify-between items-center px-6 bg-[#0c0c0e]/50 backdrop-blur-md sticky top-0 z-20">
-          <div className="flex items-center gap-4 min-w-0">
-            {selectedConversation ? (
-              <>
-                <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                  <span className="font-mono text-primary truncate">
-                    {selectedConversation.conversation_id.slice(0, 12)}...
-                  </span>
-                  <span
-                    className={`px-2 py-0.5 rounded text-xs font-medium border ${getAgentColor(
-                      selectedConversation.agent
-                    )}`}
-                  >
-                    {selectedConversation.agent}
-                  </span>
-                  {selectedConversation.status === "active" && (
-                    <span className="px-2 py-0.5 rounded text-xs font-medium bg-green-500/10 text-green-400 border border-green-500/20 flex-shrink-0">
-                      LIVE
-                    </span>
-                  )}
-                </h2>
-                <span className="hidden md:inline text-sm text-gray-400 border-l border-white/10 pl-4 whitespace-nowrap">
-                  Started {selectedConversation.created_at}
-                </span>
-              </>
-            ) : (
-              <h2 className="text-xl font-bold text-white">Select a conversation</h2>
-            )}
-          </div>
-          <div className="flex items-center gap-3">
-            <button className="flex items-center px-3 py-1.5 text-xs font-medium text-gray-300 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg transition-colors whitespace-nowrap">
-              <span className="material-icons-round text-sm mr-2">download</span>
-              Export Log
-            </button>
-          </div>
-        </div>
+      <ConversationDetail
+        conversation={selectedConversation}
+        loading={loadingDetail}
+        showThinking={showThinking}
+        showTools={showTools}
+        listLoading={loading}
+      />
 
-        {/* Chat Log */}
-        <div className="flex-1 overflow-y-auto min-h-0 p-8 space-y-6">
-          {loadingDetail ? (
-            <div className="flex items-center justify-center h-full">
-              <div className="text-gray-400 flex items-center gap-2">
-                <span className="material-icons-round animate-spin">refresh</span>
-                Loading conversation...
-              </div>
-            </div>
-          ) : selectedConversation ? (
-            (selectedConversation.events || [])
-              .filter((event) => {
-                if (!showThinking && (event.type === "thinking" || event.type === "reasoning")) return false;
-                if (!showTools && event.type === "tool_call") return false;
-                return true;
-              })
-              .map((event, i) => (
-                <EventBlock key={i} event={event} agent={selectedConversation.agent} />
-              ))
-          ) : (
-            <div className="flex items-center justify-center h-full">
-              <p className="text-gray-500">
-                {loading ? "Loading conversations..." : "No conversation selected"}
-              </p>
-            </div>
-          )}
-        </div>
-
-        {/* Input (View Only) */}
-        <div className="p-6 border-t border-white/5 bg-[#0c0c0e]">
-          <div className="relative opacity-60">
-            <input
-              type="text"
-              disabled
-              value="Conversation is in view-only mode."
-              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 pl-12 text-sm text-gray-400 cursor-not-allowed"
-            />
-            <span className="absolute left-4 top-3 text-gray-500">
-              <span className="material-icons-round text-lg">lock</span>
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* Conversations Sidebar */}
-      <div
-        className={`${conversationsPanelCollapsed ? "w-12" : "w-80"
-          } h-full flex flex-col border-l border-white/5 bg-[#0c0c0e] flex-shrink-0 transition-all duration-300`}
-      >
-        <div className="p-4 border-b border-white/5 flex justify-between items-center">
-          {!conversationsPanelCollapsed && (
-            <h2 className="text-lg font-bold text-white">Conversations</h2>
-          )}
-          <button
-            onClick={() => setConversationsPanelCollapsed(!conversationsPanelCollapsed)}
-            className="text-gray-400 hover:text-gray-200 transition-colors"
-          >
-            <span className="material-icons-round">
-              {conversationsPanelCollapsed ? "chevron_left" : "chevron_right"}
-            </span>
-          </button>
-        </div>
-
-        {!conversationsPanelCollapsed && (
-          <>
-            {/* Search and Filter */}
-            <div className="p-4 pt-2 border-b border-white/5">
-              <div className="relative mb-3">
-                <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <span className="material-icons-round text-gray-500 text-lg">
-                    search
-                  </span>
-                </span>
-                <input
-                  type="text"
-                  placeholder="Search Conversation ID..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="block w-full pl-10 pr-3 py-2 border border-white/10 rounded-lg leading-5 bg-[#151519] text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-sm"
-                />
-              </div>
-              <div className="flex p-1 bg-white/5 rounded-lg border border-white/5">
-                {(["all", "claude", "codex"] as const).map((f) => (
-                  <button
-                    key={f}
-                    onClick={() => setFilter(f)}
-                    className={`flex-1 py-1.5 text-xs font-medium rounded transition-all capitalize ${filter === f
-                      ? "bg-primary text-white shadow-sm ring-1 ring-white/10"
-                      : "text-gray-400 hover:text-white hover:bg-white/5"
-                      }`}
-                  >
-                    {f === "all" ? "All" : f === "claude" ? "Claude" : "Codex"}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Conversations List */}
-            <div className="flex-1 overflow-y-auto min-h-0">
-              {loading ? (
-                <div className="p-4 text-center text-gray-500">Loading...</div>
-              ) : filteredConversations.length === 0 ? (
-                <div className="p-4 text-center text-gray-500">No conversations found</div>
-              ) : (
-                filteredConversations.map((conversation) => (
-                  <div
-                    key={conversation.conversation_id}
-                    onClick={() => selectConversation(conversation)}
-                    className={`p-4 cursor-pointer border-b border-white/5 transition-colors ${selectedConversation?.conversation_id === conversation.conversation_id
-                      ? "border-l-4 border-l-primary bg-primary/5"
-                      : "border-l-4 border-l-transparent hover:bg-white/[0.02]"
-                      }`}
-                  >
-                    <div className="flex justify-between items-start mb-1">
-                      <span
-                        className={`font-mono text-sm ${selectedConversation?.conversation_id === conversation.conversation_id
-                          ? "font-semibold text-white"
-                          : "font-medium text-gray-300"
-                          }`}
-                      >
-                        {conversation.conversation_id.slice(0, 12)}...
-                      </span>
-                      <span className={`text-xs ${getStatusColor(conversation.status)}`}>
-                        {conversation.status === "active"
-                          ? "Active"
-                          : conversation.status === "error"
-                            ? "Error"
-                            : "Completed"}
-                      </span>
-                    </div>
-                    <div className="text-xs text-gray-400 mb-2">
-                      {conversation.created_at}
-                    </div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span
-                        className={`px-2 py-0.5 rounded text-[10px] font-medium border ${getAgentColor(
-                          conversation.agent
-                        )}`}
-                      >
-                        {conversation.agent}
-                      </span>
-                    </div>
-                    {conversation.task && (
-                      <p className="text-xs text-gray-500 mt-2 line-clamp-2">
-                        {conversation.task.slice(0, 80)}...
-                      </p>
-                    )}
-                  </div>
-                ))
-              )}
-            </div>
-
-            {/* Toggle Bar */}
-            <ToggleBar
-              showThinking={showThinking}
-              showTools={showTools}
-              onToggleThinking={() => setShowThinking((prev) => !prev)}
-              onToggleTools={() => setShowTools((prev) => !prev)}
-            />
-          </>
-        )}
-      </div>
+      <ConversationList
+        conversations={filteredConversations}
+        selectedId={selectedConversation?.conversation_id}
+        onSelect={selectConversation}
+        loading={loading}
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        filter={filter}
+        onFilterChange={setFilter}
+        collapsed={conversationsPanelCollapsed}
+        onToggleCollapse={() => setConversationsPanelCollapsed(!conversationsPanelCollapsed)}
+        showThinking={showThinking}
+        showTools={showTools}
+        onToggleThinking={() => setShowThinking(!showThinking)}
+        onToggleTools={() => setShowTools(!showTools)}
+      />
     </div>
   );
-}
-
-function EventBlock({
-  event,
-  agent,
-}: {
-  event: SessionEvent;
-  agent: "claude" | "codex";
-}) {
-  // Color scheme - consistent for both agents:
-  // - Thinking: Purple
-  // - Tool call/response: Blue
-  // - Result: Green
-
-  switch (event.type) {
-    case "prompt":
-      return (
-        <div className="flex justify-end">
-          <div className="max-w-[80%] bg-[#1e1e24] text-white p-4 rounded-2xl rounded-tr-sm shadow-md border border-white/5">
-            <div className="flex items-center justify-between mb-2 pb-2 border-b border-white/10">
-              <span className="text-xs font-bold tracking-wider text-amber-400 uppercase">
-                Maestro Prompt
-              </span>
-              {event.timestamp && (
-                <span className="text-[10px] font-mono text-gray-500">
-                  {event.timestamp}
-                </span>
-              )}
-            </div>
-            <p className="text-sm leading-relaxed text-gray-200 whitespace-pre-wrap">
-              {event.content}
-            </p>
-          </div>
-        </div>
-      );
-
-    case "system":
-      return (
-        <div className="flex justify-center">
-          <div className="px-4 py-2 bg-white/5 rounded-full text-xs text-gray-400 border border-white/5">
-            {event.content}
-          </div>
-        </div>
-      );
-
-    case "thinking":
-    case "reasoning":
-      return (
-        <div className="flex justify-start w-full">
-          <div
-            className="w-full max-w-[85%] border p-4 rounded-xl relative group"
-            style={{
-              borderColor: "rgba(168,85,247,0.3)",
-              backgroundColor: "rgba(168,85,247,0.05)",
-            }}
-          >
-            <div
-              className="absolute -left-3 top-4 w-6 h-6 rounded-full flex items-center justify-center border z-10"
-              style={{
-                backgroundColor: "#581c87",
-                borderColor: "#a855f7",
-                boxShadow: "0 0 20px rgba(168,85,247,0.5)",
-              }}
-            >
-              <span className="material-icons-round text-white text-xs">
-                psychology
-              </span>
-            </div>
-            <div className="pl-5">
-              <div className="flex items-center gap-2 mb-2">
-                <span
-                  className="text-xs font-bold uppercase tracking-wider"
-                  style={{ color: "#c084fc" }}
-                >
-                  Thinking
-                </span>
-                <span
-                  className="h-px w-8"
-                  style={{ backgroundColor: "rgba(168,85,247,0.3)" }}
-                ></span>
-              </div>
-              <p
-                className="font-mono text-xs leading-relaxed"
-                style={{ color: "rgba(233,213,255,0.8)" }}
-              >
-                {event.content}
-              </p>
-            </div>
-          </div>
-        </div>
-      );
-
-    case "response":
-      // Blue theme for agent responses (intermediate messages)
-      return (
-        <div className="flex justify-start w-full">
-          <div
-            className="w-full max-w-[85%] border p-4 rounded-xl relative group"
-            style={{
-              borderColor: "rgba(59,130,246,0.3)",
-              backgroundColor: "rgba(59,130,246,0.05)",
-            }}
-          >
-            <div
-              className="absolute -left-3 top-4 w-6 h-6 rounded-full flex items-center justify-center border z-10"
-              style={{
-                backgroundColor: "#1e3a5f",
-                borderColor: "#3b82f6",
-                boxShadow: "0 0 20px rgba(59,130,246,0.5)",
-              }}
-            >
-              <span className="material-icons-round text-white text-xs">
-                smart_toy
-              </span>
-            </div>
-            <div className="pl-5">
-              <div className="flex items-center gap-2 mb-2">
-                <span
-                  className="text-xs font-bold uppercase tracking-wider"
-                  style={{ color: "#60a5fa" }}
-                >
-                  {agent === "claude" ? "Claude" : "Codex"}
-                </span>
-              </div>
-              <p className="text-sm leading-relaxed text-gray-200 whitespace-pre-wrap">
-                {event.content}
-              </p>
-            </div>
-          </div>
-        </div>
-      );
-
-    case "tool_call":
-      // Blue theme for tool calls - fixed height cards with scrollable content
-      return (
-        <div className="flex justify-start w-full">
-          <div className="w-full max-w-[85%] pl-8 space-y-2">
-            <div className="bg-[#0d1117] border-l-2 border-blue-500 p-3 rounded-r-lg font-mono text-xs shadow-sm">
-              <div className="flex justify-between items-center mb-1 text-blue-400">
-                <span className="font-bold">tool_call: {event.tool}</span>
-              </div>
-              {event.content && (
-                <pre className="text-gray-300 whitespace-pre-wrap text-xs overflow-x-auto max-h-32 overflow-y-auto">
-                  {event.content}
-                </pre>
-              )}
-            </div>
-            {event.output && (
-              <div className="bg-[#0d1117] border-l-2 border-sky-500 p-3 rounded-r-lg font-mono text-xs shadow-sm">
-                <div className="flex justify-between items-center mb-1 text-sky-400">
-                  <span className="font-bold">output</span>
-                </div>
-                <pre className="text-gray-400 whitespace-pre-wrap text-xs overflow-x-auto max-h-32 overflow-y-auto">
-                  {event.output}
-                </pre>
-              </div>
-            )}
-          </div>
-        </div>
-      );
-
-    case "result":
-      // Green theme for final result
-      return (
-        <div className="flex justify-start">
-          <div
-            className="max-w-[80%] border text-gray-100 p-5 rounded-2xl rounded-tl-sm shadow-lg"
-            style={{
-              background: "linear-gradient(to bottom right, #14532d, #166534)",
-              borderColor: "rgba(34,197,94,0.3)",
-              boxShadow: "0 4px 6px -1px rgba(34,197,94,0.1)",
-            }}
-          >
-            <div className="flex items-center justify-between mb-3 pb-2 border-b border-white/10">
-              <div className="flex items-center gap-2">
-                <span
-                  className="material-icons-round text-sm"
-                  style={{ color: "#22c55e" }}
-                >
-                  check_circle
-                </span>
-                <span
-                  className="text-xs font-bold tracking-wider uppercase"
-                  style={{ color: "#86efac" }}
-                >
-                  {agent === "claude" ? "Claude" : "Codex"} Result
-                </span>
-              </div>
-            </div>
-            <div className="prose prose-sm prose-invert max-w-none text-sm text-gray-200 whitespace-pre-wrap">
-              {event.content}
-            </div>
-          </div>
-        </div>
-      );
-
-    default:
-      return null;
-  }
 }
