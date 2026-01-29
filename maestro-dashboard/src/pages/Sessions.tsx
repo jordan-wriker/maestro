@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import type { WorkSession } from "../types/api";
+import { api } from "../api/endpoints";
 
 import { AGENT_COLORS, STATUS_CONFIG } from "@/config/constants";
 
@@ -204,8 +205,7 @@ export default function Sessions() {
   const fetchSessions = async () => {
     setLoading(true);
     try {
-      const response = await fetch("/api/sessions");
-      const data = await response.json();
+      const data = await api.sessions.list();
       if (data.sessions) {
         setSessions(data.sessions);
       }
@@ -222,14 +222,10 @@ export default function Sessions() {
 
   const handleActivateSession = async (sessionId: string) => {
     try {
-      const response = await fetch(`/api/sessions/${sessionId}/activate`, {
-        method: 'PUT'
-      });
-      if (response.ok) {
-        const updatedSession = await response.json();
-        setCurrentSession(updatedSession);
-        fetchSessions(); // Refresh list to show active state
-      }
+      // api.sessions.activate returns the updated session
+      const updatedSession = await api.sessions.activate(sessionId);
+      setCurrentSession(updatedSession);
+      fetchSessions(); // Refresh list to show active state
     } catch (error) {
       console.error('Failed to activate session:', error);
     }
@@ -237,22 +233,16 @@ export default function Sessions() {
 
   const handleCreateSession = async (title: string, rootDirectory?: string) => {
     try {
-      const response = await fetch('/api/sessions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title,
-          root_directory: rootDirectory || undefined,
-          agents: [
-            { name: "Claude", color: "blue" },
-            { name: "Codex", color: "green" }
-          ]
-        })
+      const newSession = await api.sessions.create({
+        title,
+        root_directory: rootDirectory || undefined,
+        agents: [
+          { name: "Claude", color: "blue" },
+          { name: "Codex", color: "green" }
+        ]
       });
-      if (response.ok) {
-        const newSession = await response.json();
-        await handleActivateSession(newSession.session_id);
-      }
+
+      await handleActivateSession(newSession.session_id);
     } catch (error) {
       console.error('Failed to create session:', error);
       throw error;

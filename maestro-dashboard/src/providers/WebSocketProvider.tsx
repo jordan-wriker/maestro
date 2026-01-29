@@ -1,6 +1,7 @@
 import React, { createContext, useEffect, useState } from "react";
 import type { WorkSession } from "../types/api";
 import type { LogEntry } from "../types/models";
+import { api } from "../api/endpoints";
 
 interface WebSocketContextType {
     logs: LogEntry[];
@@ -180,23 +181,20 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
 
     const refreshSessions = async () => {
         try {
-            const response = await fetch("/api/sessions/current");
-            if (response.ok) {
-                const session = await response.json();
+            try {
+                const session = await api.sessions.getCurrent();
                 setCurrentSession(session);
-            } else {
-                const listRes = await fetch("/api/sessions");
-                const data = await listRes.json();
+            } catch (err) {
+                // If getCurrent fails (e.g. 404), switch to list
+                const data = await api.sessions.list();
                 if (data.sessions && data.sessions.length > 0) {
                     // Activate the first session found as fallback
                     const fallbackSession = data.sessions[0];
-                    const activateRes = await fetch(`/api/sessions/${fallbackSession.session_id}/activate`, {
-                        method: 'PUT'
-                    });
-                    if (activateRes.ok) {
-                        const activatedSession = await activateRes.json();
+                    try {
+                        const activatedSession = await api.sessions.activate(fallbackSession.session_id);
                         setCurrentSession(activatedSession);
-                    } else {
+                    } catch (activateErr) {
+                        // Fallback to just setting it locally if activation fails
                         setCurrentSession(fallbackSession);
                     }
                 }
@@ -214,8 +212,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
 
         if (sessionChanged) {
             wsState.logs = [];
-            fetch(`/api/logs?session_id=${session.session_id}`)
-                .then(res => res.json())
+            api.logs.list(session.session_id)
                 .then(data => {
                     if (Array.isArray(data)) {
                         wsState.logs = data as LogEntry[];
@@ -248,8 +245,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
         if (wsState.logs.length === 0 && !wsState.currentSession) {
             refreshSessions();
         } else if (wsState.logs.length === 0 && wsState.currentSession) {
-            fetch(`/api/logs?session_id=${wsState.currentSession.session_id}`)
-                .then(res => res.json())
+            api.logs.list(wsState.currentSession.session_id)
                 .then(data => {
                     if (Array.isArray(data)) {
                         wsState.logs = data as LogEntry[];

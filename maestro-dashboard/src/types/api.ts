@@ -1,5 +1,5 @@
 
-import { LogEntry } from './models';
+import type { LogEntry } from './models';
 
 // --- Shared/Common Types ---
 

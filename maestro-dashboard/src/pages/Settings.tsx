@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { api } from "@/api/endpoints";
 
 export default function SettingsPage() {
     const [clearing, setClearing] = useState(false);
@@ -13,13 +14,7 @@ export default function SettingsPage() {
         setMessage(null);
 
         try {
-            const response = await fetch("/api/admin/clear-database", {
-                method: "POST",
-            });
-
-            if (!response.ok) {
-                throw new Error("Failed to clear database");
-            }
+            await api.admin.clearDatabase();
 
             setMessage({ text: "Database cleared successfully", type: "success" });
         } catch (error) {
@@ -55,8 +50,8 @@ export default function SettingsPage() {
                         onClick={handleClearDatabase}
                         disabled={clearing}
                         className={`px-4 py-2 rounded-lg font-medium transition-colors ${clearing
-                                ? 'bg-red-500/50 text-white/50 cursor-not-allowed'
-                                : 'bg-red-600 hover:bg-red-700 text-white shadow-[0_0_10px_rgba(220,38,38,0.5)]'
+                            ? 'bg-red-500/50 text-white/50 cursor-not-allowed'
+                            : 'bg-red-600 hover:bg-red-700 text-white shadow-[0_0_10px_rgba(220,38,38,0.5)]'
                             }`}
                     >
                         {clearing ? "Clearing..." : "Clear Database"}

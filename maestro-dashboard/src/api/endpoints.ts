@@ -1,14 +1,14 @@
 
 import { apiClient } from './client';
-import {
+import type {
     WorkSession,
     SessionResponse,
     CreateSessionRequest,
     BatchResponse,
     StatsResponse,
     LogsResponse,
-    ConversationResponse
 } from '../types/api';
+import type { ConversationSummary, ConversationDetail } from '../types/models';
 
 export const api = {
     sessions: {
@@ -44,7 +44,15 @@ export const api = {
     },
 
     conversations: {
-        list: (sessionId: string) =>
-            apiClient.get<ConversationResponse>('/conversations', { session_id: sessionId }),
+        list: (sessionId: string, agent?: string) =>
+            apiClient.get<ConversationSummary[]>('/conversations', { session_id: sessionId, ...(agent ? { agent } : {}) }),
+
+        get: (conversationId: string, sessionId?: string) =>
+            apiClient.get<ConversationDetail>(`/conversations/${conversationId}`, sessionId ? { session_id: sessionId } : undefined),
+    },
+
+    admin: {
+        clearDatabase: () =>
+            apiClient.post<void>('/admin/clear-database'),
     }
 };

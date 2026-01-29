@@ -1,6 +1,6 @@
 
 
-import { APIError } from '../types/api';
+import type { APIError } from '../types/api';
 
 type RequestConfig = RequestInit & {
     params?: Record<string, string | number | boolean | undefined>;
@@ -56,7 +56,7 @@ export const apiState = new ApiState();
 
 export class ApiClient {
     private baseUrl: string;
-    public requestInterceptors: set<RequestInterceptor> = new Set();
+    public requestInterceptors: Set<RequestInterceptor> = new Set();
     public responseInterceptors: Set<ResponseInterceptor> = new Set();
 
     constructor(baseUrl: string = '/api') {
@@ -80,7 +80,7 @@ export class ApiClient {
         // Run request interceptors
         if (!skipInterceptors) {
             for (const interceptor of this.requestInterceptors) {
-                const interceptorResult = await interceptor({ params, skipInterceptors, ...init });
+                const interceptorResult: RequestConfig = await interceptor({ params, skipInterceptors, ...init });
                 params = interceptorResult.params;
                 skipInterceptors = interceptorResult.skipInterceptors;
                 init = interceptorResult;

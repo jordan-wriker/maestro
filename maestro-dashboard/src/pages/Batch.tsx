@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import type { Batch as APIBatch } from "../types/api";
+import { api } from "../api/endpoints";
 
 
 
@@ -54,8 +55,7 @@ export default function BatchPage() {
       setBatches([]);
     }
     try {
-      const response = await fetch(`/api/batches?session_id=${currentSession.session_id}`);
-      const data = await response.json();
+      const data = await api.batches.list(currentSession.session_id);
       setBatches(data);
     } catch (error) {
       console.error('Failed to fetch batches:', error);

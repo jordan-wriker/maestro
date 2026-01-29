@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useWebSocket } from "@/hooks/useWebSocket";
+import { api } from "@/api/endpoints";
 
 export default function CompactStatsCards() {
   const { currentSession } = useWebSocket();
@@ -23,9 +24,7 @@ export default function CompactStatsCards() {
     let intervalId: ReturnType<typeof setInterval> | null = null;
     const loadStats = async () => {
       try {
-        const response = await fetch(`/api/stats?session_id=${currentSession.session_id}`);
-        if (!response.ok) return;
-        const data = await response.json();
+        const data = await api.stats.get(currentSession.session_id);
         if (!isMounted) return;
         setStats({
           claudeTasks: data?.claudeTasks ?? 0,
