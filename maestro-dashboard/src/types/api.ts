@@ -1,3 +1,15 @@
+
+import { LogEntry } from './models';
+
+// --- Shared/Common Types ---
+
+export interface APIError {
+    detail: string | { [key: string]: string[] } | any;
+    status?: number;
+}
+
+// --- Session Types ---
+
 export interface WorkSessionAgent {
     name: string;
     color: string;
@@ -15,6 +27,21 @@ export interface WorkSession {
     created_at: string;
     updated_at: string;
 }
+
+export interface CreateSessionRequest {
+    title: string;
+    root_directory?: string;
+    agents?: WorkSessionAgent[];
+}
+
+export interface SessionResponse {
+    sessions: WorkSession[];
+    total: number;
+    page: number;
+    size: number;
+}
+
+// --- Batch Types ---
 
 export interface BatchTask {
     task_id: string;
@@ -37,6 +64,10 @@ export interface Batch {
     updated_at: string;
 }
 
+export interface BatchResponse extends Array<Batch> { }
+
+// --- Conversation Types ---
+
 export interface Conversation {
     conversation_id: string;
     session_id: string;
@@ -48,3 +79,19 @@ export interface Conversation {
     created_at: string;
     last_activity: string;
 }
+
+export interface ConversationResponse extends Array<Conversation> { }
+
+// --- Stats Types ---
+
+export interface StatsResponse {
+    claudeTasks: number;
+    codexTasks: number;
+    avgLatency: number;
+    [key: string]: number | string;
+}
+
+// --- Log Types ---
+
+export interface LogsResponse extends Array<LogEntry> { }
+
