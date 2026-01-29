@@ -11,6 +11,7 @@ interface WebSocketContextType {
     currentSession: WorkSession | null;
     setCurrentSession: (session: WorkSession) => Promise<void>;
     refreshSessions: () => Promise<void>;
+    retryConnection: () => void;
 }
 
 export const WebSocketContext = createContext<WebSocketContextType>({
@@ -20,6 +21,7 @@ export const WebSocketContext = createContext<WebSocketContextType>({
     currentSession: null,
     setCurrentSession: async () => { },
     refreshSessions: async () => { },
+    retryConnection: async () => { },
 });
 
 // Determine WebSocket URL based on environment
@@ -33,7 +35,7 @@ function getWebSocketUrl(): string {
 
 export function WebSocketProvider({ children }: { children: React.ReactNode }) {
     const wsUrl = useMemo(() => getWebSocketUrl(), []);
-    const { socket, isConnected, connectionError } = useSocketConnection(wsUrl);
+    const { socket, isConnected, connectionError, retry } = useSocketConnection(wsUrl);
     const { logs, currentSession, setCurrentSession, refreshSessions, addLog } = useSessionState();
 
     // Listen for WebSocket messages
@@ -69,8 +71,9 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
         connectionError,
         currentSession,
         setCurrentSession,
-        refreshSessions
-    }), [logs, isConnected, connectionError, currentSession, setCurrentSession, refreshSessions]);
+        refreshSessions,
+        retryConnection: retry
+    }), [logs, isConnected, connectionError, currentSession, setCurrentSession, refreshSessions, retry]);
 
     return (
         <WebSocketContext.Provider value={contextValue}>

@@ -2,9 +2,12 @@
 
 import type { APIError } from '../types/api';
 
+const DEFAULT_TIMEOUT = 30000; // 30 seconds
+
 type RequestConfig = RequestInit & {
     params?: Record<string, string | number | boolean | undefined>;
     skipInterceptors?: boolean;
+    timeout?: number;
 };
 
 type RequestInterceptor = (config: RequestConfig) => RequestConfig | Promise<RequestConfig>;
@@ -112,11 +115,16 @@ export class ApiClient {
 
         apiState.startRequest();
 
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), config.timeout || DEFAULT_TIMEOUT);
+
         try {
             let response = await fetch(url, {
                 ...init,
                 headers,
+                signal: controller.signal,
             });
+            clearTimeout(timeoutId);
 
             // Run response interceptors
             if (!skipInterceptors) {
@@ -157,12 +165,19 @@ export class ApiClient {
             status: response.status,
         };
 
+        apiState.notifyError(error);
         throw error;
     }
 
     private normalizeError(error: any): APIError {
         if (this.isAPIError(error)) {
             return error;
+        }
+        if (error instanceof DOMException && error.name === 'AbortError') {
+            return {
+                detail: 'Request timed out',
+                status: 408
+            };
         }
         return {
             detail: error instanceof Error ? error.message : 'Network error occurred',
