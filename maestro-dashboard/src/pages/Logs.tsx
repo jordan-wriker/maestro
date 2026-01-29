@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import type { ConversationSummary, SessionEvent, ConversationDetail as ConversationDetailType } from "../types/models";
 import { api } from "../api/endpoints";
-import ConversationList from "@/components/logs/ConversationList";
+import ConversationList from "@/components/logs/VirtualizedConversationList";
 import ConversationDetail from "@/components/logs/ConversationDetail";
 
 export default function LogsPage() {
