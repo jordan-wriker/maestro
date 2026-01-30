@@ -11,7 +11,7 @@ export const ApiErrorSchema = z.object({
     status: z.number().optional(),
 });
 
-export const SessionEventSchema = z.object({
+export const ConversationEventSchema = z.object({
     type: z.enum(["prompt", "system", "response", "tool_call", "result", "thinking", "reasoning"]),
     content: z.string(),
     tool: z.string().optional(),
@@ -47,18 +47,23 @@ export const CreateSessionRequestSchema = z.object({
 
 export const SessionResponseSchema = z.object({
     sessions: z.array(WorkSessionSchema),
-    total: z.number(),
-    page: z.number(),
-    size: z.number(),
+    // Pagination fields are optional - backend (SessionListResponse) doesn't return them
+    total: z.number().optional(),
+    page: z.number().optional(),
+    size: z.number().optional(),
 });
 
 // --- Batch Schemas ---
 
-// Define result shape
+// Define result shape - matches actual backend response structure
 export const BatchTaskResultSchema = z.object({
+    text: z.string().optional(),
+    conversation_id: z.string().optional(),
+    error: z.string().nullable().optional(),
+    // Legacy fields for backwards compatibility
     output: z.string().optional(),
     success: z.boolean().optional(),
-}).passthrough(); // Allow other properties if needed for now
+}).passthrough();
 
 export const BatchTaskSchema = z.object({
     task_id: z.string(),
@@ -83,6 +88,19 @@ export const BatchSchema = z.object({
 
 export const BatchResponseSchema = z.array(BatchSchema);
 
+// BatchStatusResponse - returned by POST /batch/status
+export const BatchStatusResultSchema = z.object({
+    task_id: z.string(),
+    status: z.string(),
+    result: z.unknown().optional(),
+});
+
+export const BatchStatusResponseSchema = z.object({
+    batch_id: z.string(),
+    status: z.string(),
+    new_results: z.array(BatchStatusResultSchema),
+});
+
 // --- Conversation Schemas ---
 
 export const ConversationSummarySchema = z.object({
@@ -99,7 +117,7 @@ export const ConversationDetailSchema = z.object({
     conversation_id: z.string(),
     agent: z.enum(["claude", "codex"]),
     created_at: z.string(),
-    events: z.array(z.lazy(() => SessionEventSchema)), // Use lazy if circular, or just SessionEventSchema if defined above. SessionEventSchema is defined below, so might need to move or use lazy. defined below lines 107.
+    events: z.array(z.lazy(() => ConversationEventSchema)), // Use lazy if circular, or just ConversationEventSchema if defined above. ConversationEventSchema is defined below, so might need to move or use lazy. defined below lines 107.
     status: z.enum(["completed", "error", "active", "running"]),
     task: z.string(),
 });
@@ -128,10 +146,10 @@ export const StatsResponseSchema = z.object({
 
 // --- Log Schemas ---
 
-// Need to import SessionEvent from models or define it here if we want to change models to rely on schemas.
+// Need to import ConversationEvent from models or define it here if we want to change models to rely on schemas.
 // For now, let's define a schema compatible with existing types.
 
-// LogEntrySchema uses SessionEventSchema defined at the top
+// LogEntrySchema uses ConversationEventSchema defined at the top
 export const LogEntrySchema = z.object({
     id: z.number(),
     timestamp: z.string(),
@@ -140,7 +158,7 @@ export const LogEntrySchema = z.object({
     final_response: z.string().optional(),
     conversation_id: z.string().optional(),
     status: z.string(),
-    events: z.array(SessionEventSchema).optional(),
+    events: z.array(ConversationEventSchema).optional(),
 });
 
 export const LogsResponseSchema = z.array(LogEntrySchema);
@@ -159,7 +177,9 @@ export type Conversation = z.infer<typeof ConversationSchema>;
 export type ConversationResponse = z.infer<typeof ConversationResponseSchema>;
 export type StatsResponse = z.infer<typeof StatsResponseSchema>;
 export type LogEntry = z.infer<typeof LogEntrySchema>;
-export type SessionEvent = z.infer<typeof SessionEventSchema>;
+export type ConversationEvent = z.infer<typeof ConversationEventSchema>;
 export type LogsResponse = z.infer<typeof LogsResponseSchema>;
 export type ConversationSummary = z.infer<typeof ConversationSummarySchema>;
 export type ConversationDetail = z.infer<typeof ConversationDetailSchema>;
+export type BatchStatusResult = z.infer<typeof BatchStatusResultSchema>;
+export type BatchStatusResponse = z.infer<typeof BatchStatusResponseSchema>;

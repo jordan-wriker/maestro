@@ -2,6 +2,7 @@
 
 import { z } from 'zod';
 import type { APIError } from '../types/api';
+import { logClientEvent } from '../utils/clientLogger';
 
 const DEFAULT_TIMEOUT = 30000; // 30 seconds
 
@@ -100,6 +101,16 @@ export class ApiClient {
         } finally {
             this.inFlightRequests.delete(cacheKey);
         }
+    }
+
+    private shouldLogEndpoint(endpoint: string): boolean {
+        return endpoint.startsWith("/logs") || endpoint.startsWith("/conversations");
+    }
+
+    private getSessionIdFromParams(params?: RequestConfig["params"]): string | undefined {
+        if (!params) return undefined;
+        const value = params["session_id"];
+        return typeof value === "string" ? value : undefined;
     }
 
     private getCacheKey(method: string, endpoint: string, params?: Record<string, any>, body?: string): string {
@@ -249,7 +260,36 @@ export class ApiClient {
     // Validated methods
     public async getValidated<T>(endpoint: string, schema: z.ZodSchema<T>, params?: RequestConfig['params'], init?: RequestInit): Promise<T> {
         const raw = await this.get<unknown>(endpoint, params, init);
-        return this.validate(raw, schema);
+        if (this.shouldLogEndpoint(endpoint)) {
+            await logClientEvent({
+                session_id: this.getSessionIdFromParams(params),
+                level: "debug",
+                source: "ApiClient",
+                message: "Received response for validated endpoint",
+                data: {
+                    endpoint,
+                    type: Array.isArray(raw) ? "array" : typeof raw,
+                    size: Array.isArray(raw) ? raw.length : undefined,
+                },
+            });
+        }
+        try {
+            return this.validate(raw, schema);
+        } catch (error) {
+            if (this.shouldLogEndpoint(endpoint)) {
+                await logClientEvent({
+                    session_id: this.getSessionIdFromParams(params),
+                    level: "error",
+                    source: "ApiClient",
+                    message: "Schema validation failed for endpoint",
+                    data: {
+                        endpoint,
+                        error: error instanceof Error ? error.message : String(error),
+                    },
+                });
+            }
+            throw error;
+        }
     }
 
     public async postValidated<T>(endpoint: string, schema: z.ZodSchema<T>, body?: any, init?: RequestInit): Promise<T> {
@@ -293,4 +333,3 @@ export class ApiClient {
 }
 
 export const apiClient = new ApiClient();
-

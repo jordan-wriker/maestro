@@ -1,7 +1,7 @@
 from typing import Optional, List
 from datetime import datetime
 from sqlmodel import SQLModel, Field, Relationship
-from sqlalchemy import Index
+from sqlalchemy import Index, text
 
 class WorkSession(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -21,7 +21,7 @@ class WorkSession(SQLModel, table=True):
             "ix_worksession_is_current_session_unique",
             "is_current_session",
             unique=True,
-            sqlite_where="is_current_session = 1",
+            sqlite_where=text("is_current_session = 1"),
         ),
     )
 

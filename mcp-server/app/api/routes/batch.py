@@ -1,10 +1,11 @@
 import uuid
 import asyncio
+import json
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from app.api.deps import get_batch_manager, get_app_state, get_db_service
 from app.models.requests import BatchSubmitRequest, BatchStatusRequest
-from app.models.responses import BatchSubmitResponse, BatchStatusResponse, BatchResponse
+from app.models.responses import BatchSubmitResponse, BatchStatusResponse, BatchResponse, BatchTaskResponse
 from app.services.batch_manager import BatchManager
 from app.services.db_service import DBService
 from app.core.state import AppState
@@ -82,14 +83,13 @@ async def get_batch_status(
     
     for t in db_tasks:
         if t.status in ["completed", "failed"] and t.task_id not in request.ack_task_ids:
-            import json
             result_data = None
             if t.result:
                 try:
                     result_data = json.loads(t.result)
                 except:
                     result_data = t.result
-            
+
             new_results.append({
                 "task_id": t.task_id,
                 "status": t.status,
@@ -121,12 +121,36 @@ async def list_batches(
     for b in db_batches:
         # Get tasks for this batch
         tasks = db_service.get_batch_tasks(b.batch_id)
-        # Convert to dicts for the response
-        task_dicts = [t.model_dump() if hasattr(t, 'model_dump') else t.dict() for t in tasks]
-        
+        # Convert BatchTaskEntity to BatchTaskResponse
+        task_responses = []
+        for t in tasks:
+            result_data = None
+            if t.result:
+                try:
+                    result_data = json.loads(t.result)
+                except:
+                    result_data = t.result
+
+            task_responses.append(BatchTaskResponse(
+                task_id=t.task_id,
+                batch_id=t.batch_id,
+                status=t.status,
+                result=result_data,
+                created_at=t.created_at,
+                updated_at=t.updated_at
+            ))
+
         # Create response object
-        batch_dict = b.model_dump() if hasattr(b, 'model_dump') else b.dict()
-        batch_dict['tasks'] = task_dicts
-        response_batches.append(BatchResponse(**batch_dict))
-        
+        response_batches.append(BatchResponse(
+            batch_id=b.batch_id,
+            session_id=b.session_id,
+            status=b.status,
+            total_tasks=b.total_tasks,
+            completed_tasks=b.completed_tasks,
+            progress=b.progress,
+            tasks=task_responses,
+            created_at=b.created_at,
+            updated_at=b.updated_at
+        ))
+
     return response_batches

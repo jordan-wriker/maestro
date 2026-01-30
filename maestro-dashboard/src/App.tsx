@@ -6,7 +6,7 @@ import { ConnectionStatus } from "@/components/ui/ConnectionStatus";
 import Sidebar from "@/components/Sidebar";
 import Dashboard from "@/pages/Dashboard";
 import Sessions from "@/pages/Sessions";
-import Logs from "@/pages/Logs";
+import Agents from "@/pages/Agents";
 import Tools from "@/pages/Tools";
 import Batch from "@/pages/Batch";
 import Settings from "@/pages/Settings";
@@ -25,17 +25,20 @@ function App() {
             <div className="flex w-full h-full">
               <Sidebar />
 
-              <main className="flex-1 overflow-hidden relative z-10 flex flex-col">
-                <Routes>
-                  <Route path="/" element={<Dashboard />} />
-                  <Route path="/sessions" element={<Sessions />} />
-                  <Route path="/logs" element={<Logs />} />
-                  <Route path="/tools" element={<Tools />} />
-                  <Route path="/batch" element={<Batch />} />
-                  <Route path="/settings" element={<Settings />} />
-                  {/* Catch-all redirect to dashboard */}
-                  <Route path="*" element={<Navigate to="/" replace />} />
-                </Routes>
+              <main className="flex-1 overflow-hidden relative z-10 flex flex-col min-h-0">
+                <div className="flex-1 min-h-0">
+                  <Routes>
+                    <Route path="/" element={<Dashboard />} />
+                    <Route path="/sessions" element={<Sessions />} />
+                    <Route path="/logs" element={<Agents />} />
+                    <Route path="/agents" element={<Agents />} />
+                    <Route path="/tools" element={<Tools />} />
+                    <Route path="/batch" element={<Batch />} />
+                    <Route path="/settings" element={<Settings />} />
+                    {/* Catch-all redirect to dashboard */}
+                    <Route path="*" element={<Navigate to="/" replace />} />
+                  </Routes>
+                </div>
               </main>
             </div>
           </NotificationProvider>

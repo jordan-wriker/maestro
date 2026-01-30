@@ -1,6 +1,6 @@
-import type { SessionEvent } from './api';
+import type { ConversationEvent } from './api';
 
-export type { SessionEvent };
+export type { ConversationEvent };
 
 // LogEntry is now defined in api.ts
 

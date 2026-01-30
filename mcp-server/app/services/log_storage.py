@@ -9,7 +9,7 @@ from tenacity import retry, stop_after_attempt, wait_fixed, retry_if_exception_t
 from app.core.config import settings
 from app.core.state import AppState
 from app.core.logging import get_logger
-from app.services.parsers import parse_claude_events, parse_codex_events
+from app.services.parsers import parse_claude_events, parse_codex_events, _stringify_event_value
 
 from app.services.db_service import DBService
 
@@ -24,6 +24,42 @@ class LogStorageService:
         self.app_state = app_state
         # Normalize logs_dir using settings logic if needed, but settings.logs_dir should be string
         self.logs_dir = Path(settings.logs_dir)
+        self.application_logs_dir = self.logs_dir / "application"
+
+    def _sanitize_event_fields(self, event: Dict[str, Any]) -> None:
+        for key in ("output", "content"):
+            if key in event and not isinstance(event[key], str):
+                event[key] = _stringify_event_value(event[key])
+
+    def _sanitize_log_events(self, log: Dict[str, Any]) -> None:
+        events = log.get("events")
+        if not isinstance(events, list):
+            return
+        for event in events:
+            if isinstance(event, dict):
+                self._sanitize_event_fields(event)
+
+    def _safe_session_filename(self, session_id: Optional[str]) -> str:
+        if not session_id:
+            return "unknown"
+        safe = []
+        for ch in session_id:
+            if ch.isalnum() or ch in ("-", "_"):
+                safe.append(ch)
+        return "".join(safe) or "unknown"
+
+    async def append_application_log(self, session_id: Optional[str], entry: Dict[str, Any]) -> None:
+        if not self.application_logs_dir.exists():
+            self.application_logs_dir.mkdir(parents=True, exist_ok=True)
+
+        file_name = f"{self._safe_session_filename(session_id)}.log"
+        log_file = self.application_logs_dir / file_name
+
+        try:
+            async with aiofiles.open(log_file, "a") as f:
+                await f.write(json.dumps(entry, ensure_ascii=True) + "\n")
+        except Exception as e:
+            logger.warning("Failed to write application log", session_id=session_id, error=str(e))
 
     @retry(stop=stop_after_attempt(3), wait=wait_fixed(1), retry=retry_if_exception_type(OSError))
     async def save_log_to_file(self, agent: str, conversation_id: str, log_entry: Dict[str, Any], is_new_session: bool) -> None:
@@ -176,6 +212,7 @@ class LogStorageService:
                             if isinstance(log, dict):
                                 # Ensure session_id exists for older logs
                                 log.setdefault("session_id", None)
+                                self._sanitize_log_events(log)
                                 
                                 # Filter by session ID if provided
                                 if session_id and log.get("session_id") != session_id:
@@ -241,6 +278,8 @@ class LogStorageService:
                         except Exception as e:
                             logger.warning(f"Failed to parse internal events for {safe_id}: {e}")
                             log["events"] = []
+                    if isinstance(log, dict):
+                        self._sanitize_log_events(log)
             return data
         except Exception as e:
             logger.error("Error reading conversation log", conversation_id=conversation_id, error=str(e))
@@ -254,22 +293,27 @@ class LogStorageService:
         if db_service and session_id:
             try:
                 db_conversations = db_service.list_conversations_by_session(session_id)
-                results = []
-                for conv in db_conversations:
-                    # Filter by agent if requested
-                    if agent != "all" and conv.agent != agent:
-                        continue
-                        
-                    results.append({
-                        "conversation_id": conv.conversation_id,
-                        "agent": conv.agent,
-                        "created_at": conv.created_at.isoformat() if conv.created_at else "",
-                        "status": conv.status,
-                        "prompt": conv.prompt or "",
-                        "response": conv.response or "",
-                        "last_activity": conv.last_activity.isoformat() if conv.last_activity else "",
-                    })
-                return results
+                if db_conversations:
+                    results = []
+                    for conv in db_conversations:
+                        # Filter by agent if requested
+                        if agent != "all" and conv.agent != agent:
+                            continue
+                            
+                        results.append({
+                            "conversation_id": conv.conversation_id,
+                            "agent": conv.agent,
+                            "created_at": conv.created_at.isoformat() if conv.created_at else "",
+                            "status": conv.status,
+                            "task": conv.prompt or "",
+                            "final_response": conv.response or "",
+                            "last_activity": conv.last_activity.isoformat() if conv.last_activity else "",
+                        })
+                    return results
+                logger.info(
+                    "No conversations found in database for session; falling back to file logs",
+                    session_id=session_id
+                )
             except Exception as e:
                 logger.warning(f"Failed to query conversations from database for session {session_id}: {e}")
                 # Fall back to file-based listing
@@ -304,6 +348,15 @@ class LogStorageService:
                     # Conversation ID source: 1. data field, 2. filename stem
                     s_id = str(data.get("conversation_id") or log_file.stem)
                     
+                    # Optional session filter based on log entries (legacy logs may not have session_id)
+                    if session_id:
+                        session_matches = [
+                            log for log in logs
+                            if isinstance(log, dict) and log.get("session_id") == session_id
+                        ]
+                        if not session_matches and any(isinstance(log, dict) and "session_id" in log for log in logs):
+                            continue
+
                     # Prompt source
                     prompt = last_log.get("task") or first_log.get("task") or ""
                              
@@ -323,8 +376,8 @@ class LogStorageService:
                         "agent": str(data.get("agent") or agent_name),
                         "created_at": str(data.get("created_at") or last_log.get("timestamp") or ""),
                         "status": status,
-                        "prompt": str(prompt),
-                        "response": str(response),
+                        "task": str(prompt),
+                        "final_response": str(response),
                         "last_activity": str(last_log.get("timestamp") or data.get("created_at") or ""),
                     })
                 except Exception as e:

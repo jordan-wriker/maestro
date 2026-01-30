@@ -21,7 +21,7 @@ export type {
     StatsResponse,
     // Logs
     LogEntry,
-    SessionEvent, // Newly added
+    ConversationEvent, // Newly added
     LogsResponse,
     // Conversations
     ConversationSummary,

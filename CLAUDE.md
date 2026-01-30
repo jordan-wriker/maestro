@@ -4,141 +4,95 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Agent Orchestrator (Maestro) is a three-tier system for orchestrating multiple AI coding agents (Claude and Codex) with session persistence, batch processing, and real-time monitoring.
+Maestro is an MCP (Model Context Protocol) server that orchestrates multiple AI coding agents (Claude Code CLI and Codex CLI) with session persistence and parallel batch processing support.
 
 ## Architecture
 
+**Three-Layer MCP System:**
+
 ```
-MCP Client (Claude Desktop/IDE)
-         │ MCP Protocol
-         ▼
-┌─────────────────────────────┐
-│  mcp-proxy (Node.js)        │  ← MCP server exposing 6 tools
-│  index.js                   │
-└─────────────────────────────┘
-         │ HTTP (port 8000)
-         ▼
-┌─────────────────────────────┐
-│  mcp-server (Python/FastAPI)│  ← CLI orchestration, session management
-│  server.py                  │
-│  - Subprocess execution     │
-│  - WebSocket broadcasting   │
-│  - SQLite logging           │
-└─────────────────────────────┘
-         │ WebSocket + SQLite
-         ▼
-┌─────────────────────────────┐
-│  mcp-dashboard (Next.js)    │  ← Real-time monitoring UI (port 3000)
-│  Prisma + LibSQL            │
-└─────────────────────────────┘
+Claude Desktop (MCP Client) ──> mcp-proxy (Node.js) ──> mcp-server (Python/FastAPI)
+                                                           |
+                                         maestro-dashboard (React) ──> WebSocket
 ```
 
-### Component Responsibilities
-
-**mcp-proxy**: Exposes MCP tools (`claude`, `claude-reply`, `codex`, `codex-reply`, `submit_batch`, `check_batch_status`) and forwards requests to the Python backend.
-
-**mcp-server**: Executes CLI commands via subprocess with `CI=true`, parses agent output (JSON for Claude, NDJSON for Codex), persists session logs to JSON files, and broadcasts updates via WebSocket.
-
-**mcp-dashboard**: Next.js App Router application displaying session logs, batch status, and real-time updates from the WebSocket.
+1. **`mcp-proxy/` (Node.js)**: Entry point for MCP clients. Exposes 6 tools that proxy to the Python backend via HTTP.
+2. **`mcp-server/` (Python/FastAPI)**: Core orchestration backend on port 8000. Runs agent CLI commands via subprocess, manages sessions, handles batch processing with `asyncio.TaskGroup`, and provides WebSocket for real-time updates.
+3. **`maestro-dashboard/` (React/Vite)**: Monitoring UI with pages for Dashboard, Sessions, Logs, Tools, Batch, and Settings. Real-time updates via WebSocket.
 
 ## Development Commands
 
-### Start All Services
+### Python Backend (mcp-server)
 
 ```bash
-# Terminal 1: Python Backend (required)
-cd mcp-server
-python3 server.py
-
-# Terminal 2: MCP Proxy (for Claude Desktop integration)
-cd mcp-proxy
-node index.js
-
-# Terminal 3: Dashboard
-cd mcp-dashboard
-npm run dev
-```
-
-### Dashboard Commands
-
-```bash
-cd mcp-dashboard
-npm run dev      # Development server (port 3000)
-npm run build    # Production build
-npm run start    # Run production build
-npm run lint     # ESLint
-```
-
-### Database (Prisma)
-
-```bash
-cd mcp-dashboard
-npx prisma migrate dev    # Run migrations
-npx prisma studio         # Database GUI
-```
-
-### Python Backend
-
-```bash
-cd mcp-server
+# Install dependencies
 pip install -r requirements.txt
-python3 server.py
-# Or: uvicorn server:app --reload --port 8000
+
+# Start server (auto-creates SQLite DB on first run)
+python3 -m app.main
+# Or with uvicorn for hot reload:
+uvicorn app.main:app --reload --port 8000
+
+# Environment variables (prefix APP_)
+APP_HOST=0.0.0.0 APP_PORT=8000 python3 -m app.main
 ```
 
-## Key Files
+### MCP Proxy (Node.js)
 
-| Path | Purpose |
+```bash
+# Start MCP server (connects to localhost:8000)
+node index.js
+```
+
+### Dashboard (React)
+
+```bash
+cd maestro-dashboard
+npm install
+npm run dev        # Dev server at http://localhost:5173 (proxies to :8000)
+npm run build      # TypeScript build + Vite build
+npm run lint       # ESLint
+npm run preview    # Preview production build
+```
+
+## MCP Tools
+
+The `mcp-proxy/index.js` exposes these tools:
+
+| Tool | Purpose |
 |------|---------|
-| `mcp-proxy/index.js` | MCP tool definitions and HTTP forwarding |
-| `mcp-server/server.py` | FastAPI routes, CLI execution, WebSocket |
-| `mcp-server/db_logger.py` | SQLite logging to shared database |
-| `mcp-dashboard/prisma/schema.prisma` | TaskLog model definition |
-| `mcp-dashboard/src/providers/WebSocketProvider.tsx` | Global WebSocket singleton |
-| `mcp-dashboard/src/lib/db.ts` | Prisma client initialization |
+| `claude` | Start NEW Claude session (input: `prompt`) |
+| `claude-reply` | Resume Claude session (inputs: `prompt`, `session_id`) |
+| `codex` | Start NEW Codex session (input: `prompt`) |
+| `codex-reply` | Resume Codex session (inputs: `prompt`, `session_id`) |
+| `submit_batch` | Submit parallel tasks (input: `tasks[]` with `id`, `agent`, `instruction`, optional `session_id`) |
+| `check_batch_status` | Poll batch status (inputs: `batch_id`, `ack_task_ids[]`) |
+
+## Data Models (SQLModel)
+
+Core models in `mcp-server/app/models/`:
+- `WorkSession`: session_id, title, status, agents (JSON), is_current_session
+- `Batch`: batch_id, session_id, status, total_tasks, completed_tasks, progress
+- `Conversation`: conversation_id, session_id, batch_id, agent, status, prompt, response
+- `BatchTaskEntity`: task_id, batch_id, status, result (JSON)
 
 ## Session Management
 
-- **Claude CLI**: Returns JSON with `session_id`, resumed via `--resume=<ID>`
-- **Codex CLI**: Returns NDJSON with `thread_id`, resumed via `resume <ID> "prompt"`
-- Session logs stored at: `mcp-server/logs/{claude,codex}/{session_id}.json`
+- **Claude CLI**: Returns JSON with `session_id`, resume via `--resume=<ID>`
+- **Codex CLI**: Returns NDJSON with `thread_id`, resume via `resume <ID> "prompt"`
+- Logs persisted to `logs/claude/{session_id}.json` and `logs/codex/{session_id}.json`
 
-## API Endpoints (Python Backend)
+## Key Backend Services
 
-| Method | Path | Purpose |
-|--------|------|---------|
-| POST | `/agent/claude` | Execute Claude CLI |
-| POST | `/agent/codex` | Execute Codex CLI |
-| POST | `/batch/submit` | Start parallel batch |
-| POST | `/batch/status` | Poll batch results |
-| GET | `/api/sessions/{agent}` | List sessions |
-| GET | `/api/sessions/{agent}/{id}` | Get session logs |
-| WS | `/ws` | Real-time log updates |
+Located in `mcp-server/app/services/`:
+- `BatchManager`: Uses `asyncio.TaskGroup` for parallel task execution
+- `AgentRunner`: Executes CLI commands with `tenacity` retry logic
+- `WebSocketManager`: Broadcasts log updates to connected dashboard clients
+- `LogStorageService`: Persists to both files and SQLite DB
+- `DBService`: SQLModel ORM operations
 
-## Database Schema
+## Frontend Type Safety
 
-```prisma
-model TaskLog {
-  id        Int      @id @default(autoincrement())
-  agent     String   // "claude" or "codex"
-  prompt    String
-  status    String   // "Success", "Error", "Running"
-  duration  Int      // milliseconds
-  sessionId String
-  createdAt DateTime @default(now())
-}
-```
-
-## Adding a New Agent
-
-1. Add tool definition in `mcp-proxy/index.js`
-2. Add route in `mcp-server/server.py` (follow `/agent/claude` pattern)
-3. Implement output parser for the agent's format
-4. Add handler in MCP server's `CallToolRequestSchema`
-
-## Configuration Notes
-
-- Codex CLI path is hardcoded in `server.py`: `/home/jaydub/Tools/codex/codex-rs/target/release/codex`
-- Python backend runs on `http://127.0.0.1:8000`
-- Dashboard WebSocket connects to `ws://localhost:8000/ws`
-- SQLite database shared at `mcp-dashboard/prisma/dev.db`
+- TypeScript strict mode enabled
+- Zod schemas in `maestro-dashboard/src/schemas/api.ts` are the source of truth for API types
+- Virtualization (`react-window`) used for large log lists

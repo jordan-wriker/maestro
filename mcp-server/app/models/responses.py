@@ -17,6 +17,14 @@ class BatchStatusResponse(BaseModel):
     status: str
     new_results: List[Dict[str, Any]]
 
+class BatchTaskResponse(BaseModel):
+    task_id: str
+    batch_id: str
+    status: str
+    result: Optional[Dict[str, Any]] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
 class BatchResponse(BaseModel):
     batch_id: str
     session_id: str
@@ -24,7 +32,7 @@ class BatchResponse(BaseModel):
     total_tasks: int
     completed_tasks: int
     progress: float
-    tasks: List[Dict[str, Any]] = []
+    tasks: List[BatchTaskResponse] = []
     created_at: datetime
     updated_at: datetime
 
@@ -45,8 +53,8 @@ class ConversationSummary(BaseModel):
     agent: str  # "claude" or "codex"
     created_at: str  # ISO format string
     status: str  # "completed", "error", or "active"
-    prompt: str
-    response: str
+    task: str
+    final_response: str
     last_activity: Optional[str] = None  # ISO format string
 
 class ConversationDetail(BaseModel):
@@ -54,7 +62,7 @@ class ConversationDetail(BaseModel):
     agent: str  # "claude" or "codex"
     created_at: str  # ISO format string
     status: str  # "completed", "error", or "active"
-    prompt: str
+    task: str
     events: List[Dict[str, Any]]
 
 class SessionListResponse(BaseModel):

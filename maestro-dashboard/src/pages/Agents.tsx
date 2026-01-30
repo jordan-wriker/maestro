@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
 import { useWebSocket } from "@/hooks/useWebSocket";
-import type { ConversationSummary, SessionEvent, ConversationDetail as ConversationDetailType } from "../types/models";
+import type { ConversationSummary, ConversationEvent, ConversationDetail as ConversationDetailType } from "../types/models";
 import { api } from "../api/endpoints";
-import ConversationList from "@/components/logs/VirtualizedConversationList";
-import ConversationDetail from "@/components/logs/ConversationDetail";
+import ConversationList from "@/components/agents/VirtualizedConversationList";
+import ConversationDetail from "@/components/agents/ConversationDetail";
+import { logClientEvent } from "@/utils/clientLogger";
 
 export default function LogsPage() {
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
@@ -95,7 +96,7 @@ export default function LogsPage() {
       const newId = latestLog.conversation_id || prev.conversation_id;
 
       // Build new events from the live log
-      const newEvents: SessionEvent[] = [];
+      const newEvents: ConversationEvent[] = [];
 
       if (latestLog.events && Array.isArray(latestLog.events)) {
         // If the log has parsed events, use them
@@ -103,14 +104,12 @@ export default function LogsPage() {
           type?: string;
           content?: string;
           tool?: string;
-          output?: string;
           timestamp?: string;
         }>) {
           newEvents.push({
-            type: (evt.type || "response") as SessionEvent["type"],
+            type: (evt.type || "response") as ConversationEvent["type"],
             content: evt.content || "",
             tool: evt.tool,
-            output: evt.output,
             timestamp: evt.timestamp,
           });
         }
@@ -155,14 +154,40 @@ export default function LogsPage() {
       setSelectedConversation(null);
       setLoading(true);
       try {
+        await logClientEvent({
+          session_id: currentSession.session_id,
+          level: "info",
+          source: "LogsPage",
+          message: "Fetching conversations list",
+          data: { filter },
+        });
         const data = await api.conversations.list(
           currentSession.session_id,
           filter === 'all' ? undefined : filter
         );
+        await logClientEvent({
+          session_id: currentSession.session_id,
+          level: "info",
+          source: "LogsPage",
+          message: "Received conversations list",
+          data: {
+            count: data.length,
+            sample_ids: data.slice(0, 3).map((c) => c.conversation_id),
+          },
+        });
         setConversations(data);
 
         setLoading(false);
       } catch (error) {
+        await logClientEvent({
+          session_id: currentSession.session_id,
+          level: "error",
+          source: "LogsPage",
+          message: "Failed to fetch conversations list",
+          data: {
+            error: error instanceof Error ? error.message : String(error),
+          },
+        });
         console.error("Failed to fetch conversations:", error);
         setLoading(false);
       }
@@ -179,12 +204,38 @@ export default function LogsPage() {
     try {
       if (!currentSession) return;
 
+      await logClientEvent({
+        session_id: currentSession.session_id,
+        level: "info",
+        source: "LogsPage",
+        message: "Fetching conversation detail",
+        data: { conversation_id: conversation.conversation_id },
+      });
       const data = await api.conversations.get(conversation.conversation_id, currentSession.session_id);
+      await logClientEvent({
+        session_id: currentSession.session_id,
+        level: "info",
+        source: "LogsPage",
+        message: "Received conversation detail",
+        data: {
+          conversation_id: data.conversation_id,
+          event_count: data.events?.length ?? 0,
+        },
+      });
       setSelectedConversation(data);
     } catch (error: unknown) {
       // Check for 404 status in the error object (normalized by client)
       if (error && (error as any).status === 404) {
         console.warn(`Conversation ${conversation.conversation_id} not found (404).`);
+        if (currentSession) {
+          await logClientEvent({
+            session_id: currentSession.session_id,
+            level: "warn",
+            source: "LogsPage",
+            message: "Conversation detail not found",
+            data: { conversation_id: conversation.conversation_id },
+          });
+        }
         setSelectedConversation({
           conversation_id: conversation.conversation_id,
           agent: conversation.agent,
@@ -200,6 +251,18 @@ export default function LogsPage() {
           ]
         });
       } else {
+        if (currentSession) {
+          await logClientEvent({
+            session_id: currentSession.session_id,
+            level: "error",
+            source: "LogsPage",
+            message: "Failed to fetch conversation detail",
+            data: {
+              conversation_id: conversation.conversation_id,
+              error: error instanceof Error ? error.message : String(error),
+            },
+          });
+        }
         console.error("Failed to fetch conversation detail:", error);
       }
     } finally {
@@ -219,7 +282,7 @@ export default function LogsPage() {
   );
 
   return (
-    <div className="flex-1 flex overflow-hidden">
+    <div className="h-full min-h-0 flex overflow-hidden">
       <ConversationDetail
         conversation={selectedConversation}
         loading={loadingDetail}

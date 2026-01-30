@@ -4,6 +4,29 @@ from typing import List, Dict, Any, Optional, Tuple
 TRUNCATION_LIMIT = 500
 MAX_TOOL_RESULT_LENGTH = 500
 
+def _stringify_event_value(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value
+    if isinstance(value, list):
+        parts = []
+        for item in value:
+            if isinstance(item, str):
+                parts.append(item)
+            else:
+                try:
+                    parts.append(json.dumps(item, ensure_ascii=True))
+                except (TypeError, ValueError):
+                    parts.append(str(item))
+        return "\n".join(parts)
+    if isinstance(value, dict):
+        try:
+            return json.dumps(value, ensure_ascii=True)
+        except (TypeError, ValueError):
+            return str(value)
+    return str(value)
+
 def parse_claude_events(raw_output: str, prompt: str) -> Tuple[List[Dict[str, Any]], Optional[str]]:
     """
     Parse Claude JSON output into normalized events.
@@ -60,7 +83,7 @@ def parse_claude_events(raw_output: str, prompt: str) -> Tuple[List[Dict[str, An
                 for content in content_list:
                     if content.get("type") == "tool_result":
                         tool_use_id = content.get("tool_use_id")
-                        result_content = content.get("content", "")
+                        result_content = _stringify_event_value(content.get("content", ""))
                         if len(result_content) > MAX_TOOL_RESULT_LENGTH: 
                             result_content = result_content[:MAX_TOOL_RESULT_LENGTH] + "\n... (truncated)"
                         if tool_use_id and tool_use_id in tool_calls_by_id:
@@ -68,7 +91,8 @@ def parse_claude_events(raw_output: str, prompt: str) -> Tuple[List[Dict[str, An
                         else:
                             events.append({"type": "tool_result", "content": result_content})
             elif item_type == "result":
-                events.append({"type": "result", "subtype": item.get("subtype", "unknown"), "content": item.get("result", "")})
+                result_content = _stringify_event_value(item.get("result", ""))
+                events.append({"type": "result", "subtype": item.get("subtype", "unknown"), "content": result_content})
             
             # Extract conversation_id from any raw output key that might contain it
             for key in ["session_id", "thread_id", "conversation_id"]:
@@ -123,7 +147,7 @@ def parse_codex_events(raw_output: str, prompt: str) -> Tuple[List[Dict[str, Any
                     events.append({"type": "reasoning", "content": item.get("text", "")})
                 elif item_type == "command_execution":
                     cmd = item.get("command", "")
-                    output = item.get("aggregated_output", "")
+                    output = _stringify_event_value(item.get("aggregated_output", ""))
                     # Apply truncation limit
                     if len(output) > TRUNCATION_LIMIT: 
                         output = output[:TRUNCATION_LIMIT] + "\n... (truncated)"

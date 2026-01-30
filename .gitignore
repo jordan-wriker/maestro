@@ -7,6 +7,8 @@
 # Antigravity & Planning
 .agent/
 plans/
+.claude/
+misc_files/
 
 # Node functionality
 node_modules/
@@ -37,6 +39,8 @@ logs/claude/*
 !logs/claude/.gitkeep
 logs/codex/*
 !logs/codex/.gitkeep
+logs/application/*
+!logs/application/.gitkeep
 
 # OS
 .DS_Store

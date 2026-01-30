@@ -32,3 +32,11 @@ class UpdateSessionRequest(BaseModel):
     root_directory: Optional[str] = None
     agents: Optional[List[WorkSessionAgent]] = None
     total_tokens: Optional[str] = None
+
+class ClientLogEntry(BaseModel):
+    session_id: Optional[str] = None
+    level: str = "info"
+    source: str
+    message: str
+    data: Optional[dict] = None
+    timestamp: Optional[str] = None

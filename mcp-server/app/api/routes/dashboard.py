@@ -3,6 +3,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Query
 from app.api.deps import get_log_storage, get_app_state, get_db_service
 from app.models.responses import LogEntry, ConversationSummary, ConversationDetail
+from app.models.requests import ClientLogEntry
 from app.services.log_storage import LogStorageService
 from app.services.db_service import DBService
 from app.core.state import AppState
@@ -148,7 +149,7 @@ async def _get_conversation_detail(conversation_id: str, log_storage: LogStorage
         agent=agent_value,
         created_at=created_at_value,
         status=status_value,
-        prompt=prompt_value,
+        task=prompt_value,
         events=processed_events
     )
 
@@ -181,3 +182,14 @@ async def clear_database(
     db_service.clear_all_data()
     await app_state.clear_call_history()
     return {"status": "success", "message": "Database cleared successfully"}
+
+@router.post("/api/client-logs")
+async def create_client_log(
+    entry: ClientLogEntry,
+    log_storage: LogStorageService = Depends(get_log_storage)
+):
+    payload = entry.model_dump()
+    if not payload.get("timestamp"):
+        payload["timestamp"] = datetime.utcnow().isoformat()
+    await log_storage.append_application_log(entry.session_id, payload)
+    return {"status": "ok"}

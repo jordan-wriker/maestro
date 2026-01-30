@@ -6,7 +6,7 @@ import { z } from "zod";
 import { useSocketConnection } from "../hooks/useSocketConnection";
 import { useSessionState } from "../hooks/useSessionState";
 
-interface WebSocketContextType {
+export interface WebSocketContextType {
     logs: LogEntry[];
     isConnected: boolean;
     connectionError: string | null;
