@@ -332,6 +332,34 @@ class DBService:
             logger.error("Failed to clear database data", error=str(e))
             raise
 
+    def clear_session_data(self, session_id: str) -> None:
+        """Clear all data for a specific session."""
+        try:
+            # 1. Get batch IDs for this session to delete their tasks
+            batch_query = select(Batch.batch_id).where(Batch.session_id == session_id)
+            batch_ids = self.session.exec(batch_query).all()
+            
+            # 2. Delete tasks for these batches
+            if batch_ids:
+                # SQLModel/SQLAlchemy doesn't support 'in_' directly in delete() statement execution easily 
+                # without using 'delete(Table).where(col.in_(...))' construct properly.
+                # Use a delete statement with WHERE clause.
+                statement = delete(BatchTaskEntity).where(BatchTaskEntity.batch_id.in_(batch_ids))
+                self.session.exec(statement)
+
+            # 3. Delete conversations
+            self.session.exec(delete(Conversation).where(Conversation.session_id == session_id))
+            
+            # 4. Delete batches
+            self.session.exec(delete(Batch).where(Batch.session_id == session_id))
+            
+            self.session.commit()
+            logger.info("Cleared session data", session_id=session_id)
+        except Exception as e:
+            self.session.rollback()
+            logger.error("Failed to clear session data", error=str(e), session_id=session_id)
+            raise
+
     # --- Helpers ---
 
     def _convert_db_session_to_pydantic(self, db_session: DBWorkSession) -> WorkSession:

@@ -44,6 +44,14 @@ class AppState:
         async with self._call_history_lock:
             self._call_history.clear()
 
+    async def clear_session_history(self, session_id: str) -> None:
+        """Remove all history entries for a specific session (thread-safe)."""
+        async with self._call_history_lock:
+            # Filter out entries with matching session_id
+            filtered_history = [entry for entry in self._call_history if entry.get("session_id") != session_id]
+            self._call_history = deque(filtered_history, maxlen=50)
+
+
     
     async def update_latest_call(self, updates: Dict[str, Any]) -> None:
         """Update the most recent call history entry (thread-safe). DEPRECATED, use update_call_by_id."""

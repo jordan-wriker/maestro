@@ -10,6 +10,8 @@ import {
     LogsResponseSchema,
     ConversationSummarySchema,
     ConversationDetailSchema,
+    SuccessResponseSchema,
+    type SuccessResponse,
 } from '../schemas/api';
 
 export const api = {
@@ -55,7 +57,10 @@ export const api = {
 
     admin: {
         clearDatabase: () =>
-            apiClient.postValidated<void>('/admin/clear-database', z.void()),
+            apiClient.postValidated<SuccessResponse>('/admin/clear-database', SuccessResponseSchema),
+
+        clearSession: (sessionId: string) =>
+            apiClient.postValidated<SuccessResponse>(`/admin/clear-session/${sessionId}`, SuccessResponseSchema),
     },
 
     tools: {

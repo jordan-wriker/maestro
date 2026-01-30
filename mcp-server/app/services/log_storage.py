@@ -284,6 +284,60 @@ class LogStorageService:
         except Exception as e:
             logger.error("Error reading conversation log", conversation_id=conversation_id, error=str(e))
             return None
+
+    async def clear_session_logs(self, session_id: str) -> None:
+        """
+        Delete all logs associated with a session.
+        """
+        if not session_id:
+            return
+
+        # 1. Delete application log
+        safe_session_id = self._safe_session_filename(session_id)
+        app_log = self.application_logs_dir / f"{safe_session_id}.log"
+        if app_log.exists():
+            try:
+                app_log.unlink()
+                logger.info("Deleted application log", session_id=session_id)
+            except Exception as e:
+                logger.error("Failed to delete application log", session_id=session_id, error=str(e))
+
+        # 2. Iterate conversation logs and delete matches
+        for agent in ["claude", "codex"]:
+            agent_path = self.logs_dir / agent
+            if not agent_path.exists():
+                continue
+
+            for log_file in agent_path.glob("*.json"):
+                try:
+                    should_delete = False
+                    async with aiofiles.open(log_file, 'r') as f:
+                        content = await f.read()
+                    
+                    if not content.strip():
+                        # Empty file, maybe delete? Let's leave it or delete if we can't determine.
+                        # Safest to leave or delete. Let's inspect.
+                        continue
+                        
+                    data = json.loads(content)
+                    
+                    # Check top level (if supported in future) or in logs list
+                    if data.get("session_id") == session_id:
+                        should_delete = True
+                    else:
+                        logs = data.get("logs", [])
+                        if isinstance(logs, list):
+                            for log in logs:
+                                if isinstance(log, dict) and log.get("session_id") == session_id:
+                                    should_delete = True
+                                    break
+                    
+                    if should_delete:
+                        log_file.unlink()
+                        logger.info(f"Deleted {agent} log", file=log_file.name, session_id=session_id)
+                except Exception as e:
+                    logger.warning(f"Error checking/deleting log file {log_file}: {e}")
+                    continue
             
     async def list_conversations(self, agent: str = "all", session_id: Optional[str] = None, db_service: Optional[DBService] = None) -> List[Dict[str, Any]]:
         """

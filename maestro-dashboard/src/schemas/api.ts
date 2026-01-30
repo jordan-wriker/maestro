@@ -101,6 +101,13 @@ export const BatchStatusResponseSchema = z.object({
     new_results: z.array(BatchStatusResultSchema),
 });
 
+// --- General Response Schemas ---
+
+export const SuccessResponseSchema = z.object({
+    status: z.string(),
+    message: z.string(),
+});
+
 // --- Conversation Schemas ---
 
 export const ConversationSummarySchema = z.object({
@@ -183,3 +190,4 @@ export type ConversationSummary = z.infer<typeof ConversationSummarySchema>;
 export type ConversationDetail = z.infer<typeof ConversationDetailSchema>;
 export type BatchStatusResult = z.infer<typeof BatchStatusResultSchema>;
 export type BatchStatusResponse = z.infer<typeof BatchStatusResponseSchema>;
+export type SuccessResponse = z.infer<typeof SuccessResponseSchema>;

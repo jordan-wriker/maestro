@@ -3,6 +3,7 @@ import { api } from "@/api/endpoints";
 
 export default function SettingsPage() {
     const [clearing, setClearing] = useState(false);
+    const [clearingSession, setClearingSession] = useState(false);
     const [message, setMessage] = useState<{ text: string, type: 'success' | 'error' } | null>(null);
 
     const handleClearDatabase = async () => {
@@ -22,6 +23,32 @@ export default function SettingsPage() {
             setMessage({ text: "Failed to clear database", type: "error" });
         } finally {
             setClearing(false);
+        }
+    };
+
+    const handleClearSession = async () => {
+        if (!window.confirm("Are you sure you want to delete all records and logs related to the CURRENT session? The session record itself will be kept.")) {
+            return;
+        }
+
+        setClearingSession(true);
+        setMessage(null);
+
+        try {
+            const session = await api.sessions.getCurrent();
+            if (!session || !session.session_id) {
+                setMessage({ text: "No active session found", type: "error" });
+                return;
+            }
+
+            await api.admin.clearSession(session.session_id);
+
+            setMessage({ text: "Session data cleared successfully", type: "success" });
+        } catch (error) {
+            console.error(error);
+            setMessage({ text: "Failed to clear session data", type: "error" });
+        } finally {
+            setClearingSession(false);
         }
     };
 
@@ -46,16 +73,29 @@ export default function SettingsPage() {
                         </div>
                     )}
 
-                    <button
-                        onClick={handleClearDatabase}
-                        disabled={clearing}
-                        className={`px-4 py-2 rounded-lg font-medium transition-colors ${clearing
-                            ? 'bg-red-500/50 text-white/50 cursor-not-allowed'
-                            : 'bg-red-600 hover:bg-red-700 text-white shadow-[0_0_10px_rgba(220,38,38,0.5)]'
-                            }`}
-                    >
-                        {clearing ? "Clearing..." : "Clear Database"}
-                    </button>
+                    <div className="flex gap-4">
+                        <button
+                            onClick={handleClearSession}
+                            disabled={clearingSession || clearing}
+                            className={`px-4 py-2 rounded-lg font-medium transition-colors ${clearingSession
+                                ? 'bg-orange-500/50 text-white/50 cursor-not-allowed'
+                                : 'bg-orange-600 hover:bg-orange-700 text-white shadow-[0_0_10px_rgba(234,88,12,0.5)]'
+                                }`}
+                        >
+                            {clearingSession ? "Clearing..." : "Clear Session Data"}
+                        </button>
+
+                        <button
+                            onClick={handleClearDatabase}
+                            disabled={clearing || clearingSession}
+                            className={`px-4 py-2 rounded-lg font-medium transition-colors ${clearing
+                                ? 'bg-red-500/50 text-white/50 cursor-not-allowed'
+                                : 'bg-red-600 hover:bg-red-700 text-white shadow-[0_0_10px_rgba(220,38,38,0.5)]'
+                                }`}
+                        >
+                            {clearing ? "Clearing..." : "Clear Database"}
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>

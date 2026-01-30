@@ -183,6 +183,23 @@ async def clear_database(
     await app_state.clear_call_history()
     return {"status": "success", "message": "Database cleared successfully"}
 
+@router.post("/api/admin/clear-session/{session_id}")
+async def clear_session(
+    session_id: str,
+    db_service: DBService = Depends(get_db_service),
+    log_storage: LogStorageService = Depends(get_log_storage),
+    app_state: AppState = Depends(get_app_state)
+):
+    """
+    Clear all records and logs related to a specific session.
+    Keeps the session record itself.
+    """
+    db_service.clear_session_data(session_id)
+    await log_storage.clear_session_logs(session_id)
+    await app_state.clear_session_history(session_id)
+    
+    return {"status": "success", "message": f"Session {session_id} data cleared successfully"}
+
 @router.post("/api/client-logs")
 async def create_client_log(
     entry: ClientLogEntry,

@@ -193,6 +193,7 @@ def _create_conversation_log_files(logs_dir: Path, now: datetime):
         "logs": [
             {
                 "id": 1,
+                "session_id": "test-session-001",
                 "timestamp": (now - timedelta(hours=1)).isoformat(),
                 "status": "completed",
                 "agent": "claude",
@@ -224,6 +225,7 @@ def _create_conversation_log_files(logs_dir: Path, now: datetime):
         "logs": [
             {
                 "id": 2,
+                "session_id": "test-session-001",
                 "timestamp": (now - timedelta(minutes=45)).isoformat(),
                 "status": "completed",
                 "agent": "codex",
